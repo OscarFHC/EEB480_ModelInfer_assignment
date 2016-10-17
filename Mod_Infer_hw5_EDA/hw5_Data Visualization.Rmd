@@ -1,0 +1,275 @@
+---
+title: "Assignment 5: Exercise in Data Visualization."
+author: "Oscar Feng-Hsun Chang"
+output: html_document
+---
+
+In this assignment, I used baseball statistic data downloaded from [FanGraphs website](http://www.fangraphs.com) simply because I'm interested in baseball. This data include the following statistics of all the starting pitchers in the past 30 seasons (1986-2016). 
+
++ W: game winned
++ L: game lost
++ G: game played
++ GS: game played as the starter
++ IP: inning played in the whole season
++ K9: strike out produced per 9 innings
++ BB9: Balls produced per 9 innings
++ BABIP: how many of a batter's balls in play go for hits,  excluding home runs
++ LOB: Left on Base percentage,  the percentage of base runners that a pitcher strands on base over the course of a season
++ HRFB: Home Run to Fly Ball rate, ratio of how many home runs are hit against a pitcher for every fly ball they allow
++ FIP: Fielding Independent Pitching, what a player¡¦s ERA would look like over a given period of time if the pitcher were to have experienced league average results on balls in play and league average timing
++ WAR: Wins Above Replacement, an attempt by the sabermetric baseball community to summarize a player¡¦s total contributions to their team in one statistic
++ WHIP: Walks plus Hits per Innings Pitched, measures how many base runners a pitcher lets up
++ ERA: Earned Run Average, calculated by dividing a pitcher¡¦s total number of Earned Runs allowed by his total number of Innings Pitched and multiply by nine
++ Age: the pitcher's age at the season
+
+
+### Loading packages and data
+
+First, I loaded the packages that are needed in my further analyses. Note that I use dplyr (I think dplyr is a special version of plyr that is designed specifically for data frame) and tidyr instead of plyr and reshape2. However, in order to demonstrate that I can manage reshape2 package, I duplicate some of my code in two packages. 
+
+```{r, load package, message=FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(plyr)
+library(reshape2)
+```
+
+Now, load the data and skim the data type and data structure.
+
+```{r,load data}
+setwd("D:/Courses/UM/2016_WN/EEB480_modelinfer/20160926/Assignment 5 Exercise in Data Visualization")
+AL_SP = read.csv(file="MLB_AL_SP_1986_2016.csv", header = TRUE, sep=",", fill=TRUE)
+str(AL_SP)
+head(AL_SP)
+```
+
+Now use _arrange_ function to sort the data first by Season(year) then by team and Pitcher's name, so that it looks nicer.
+
+```{r, order data}
+AL_SP = AL_SP %>% arrange(Season, Team, Name)
+head(AL_SP)
+```
+
+### Answering couple easy questions
+
+
+1.In the past 30 seasons, how many starting pitchers pitched at least 1 inning and 1 game? I also make these pitchers into a new dataframe (ALSP.all). Note that I used _filter_ in _dplyr_ package, but I can also use _subset_ in _plyr_ package. 
+
+```{r, filter and subset}
+ALSP.all = AL_SP %>%
+           filter(IP>1 & GS>1)
+ALSP.all2 = AL_SP %>%
+           subset(IP>1 & GS>1)
+
+allSP = length(unique(ALSP.all$Name))
+allSP
+```
+
+2.What are the average and standard deviation of each statistics of each year? To answer this question, I first have to reshape the data into a "long" form, so I use _gather_ in _tidyr_ package and _melt_ in _reshape2_ package. 
+
+```{r, long to wide}
+ALSP.all.long = ALSP.all %>%
+                gather(key=stats, value=val, W, L, G, GS, IP, K9, BB9, HR9, BABIP, LOB, HRFB, FIP, WAR, WHIP, ERA, Age)
+ALSP.all.long2 = ALSP.all %>%
+                 melt(id.vars=colnames(ALSP.all)[1:3], variable.name="stats", value.name="val")
+# melt seems to be more convenient as it can take the output from "colnames" directly
+
+ALSP.all.long2$stats=as.character(ALSP.all.long2$stats) 
+# Beacuse melt function makes the variables (names as stats here) into factor, so I'll have to transform it 
+# into character for comparing the two dataframe.  
+all_equal(target=ALSP.all.long, current=ALSP.all.long2)
+```
+
+Just for fun, I can _cast_ (in _reshape2_) or _spread_ (in _tidyr_) the long data frame back to wide form and it should be identical to the "ALSP.all"
+
+```{r, wide to long}
+ALSP.all.wide = ALSP.all.long %>% 
+                spread(key=stats, value=val)
+
+ALSP.all.wide2 = ALSP.all.long2 %>%
+                 dcast(Season+Team+Name~stats, value.var=c("val"))
+
+all_equal(target=ALSP.all.wide, current=ALSP.all.wide2)
+all_equal(target=ALSP.all.wide, current=ALSP.all, convert=TRUE)
+all_equal(target=ALSP.all.wide2, current=ALSP.all, convert=TRUE)
+```
+
+With the long form dataframe, I can use _ddply_ function to calculate the mean and standard deviation for each statistics. But it will be very long, so I just show the first 6 rows of this summary dataframe.
+
+```{r, summarizing data}
+SeasonSum = ddply(ALSP.all.long, ~stats+Season, summarize, mean=mean(val), sd=sd(val))
+head(SeasonSum)
+```
+
+I then visualize this summary dataframe by histogram (a very busy one) and several boxplots.
+
+```{r, visulaizing summary dataframe_W/L, fig.width=10}
+ggplot(data=ALSP.all.long[which(ALSP.all.long$stats=="W"|ALSP.all.long$stats=="L"),], 
+       aes(x=factor(Season), y=val, color=stats),
+       group=stats)+
+  geom_boxplot(position="dodge")+ #self note, postition argument by default is "dodge"
+  theme(axis.text.x=element_text(angle = 90, hjust=1))+
+  xlab("Season")+
+  ylab("value")
+```
+
+Interestingly, on average, a pitcher tend to loss more than win a game.
+
+```{r, visulaizing summary dataframe, fig.width=10}
+ggplot(data=ALSP.all.long[which(ALSP.all.long$stats=="G"|ALSP.all.long$stats=="GS"),], 
+       aes(x=factor(Season), y=val, color=stats),
+       group=stats)+
+  geom_boxplot(position=position_dodge(width=0.8))+ #self note, or I can set how much each bar should dodge manually
+  theme(axis.text.x=element_text(angle = 90, hjust=1))+
+  xlab("Season")+
+  ylab("value")
+
+ggplot(data=ALSP.all.long[which(ALSP.all.long$stats=="K9"|ALSP.all.long$stats=="BB9"|ALSP.all.long$stats=="HR9"),], 
+       aes(x=factor(Season), y=val, color=stats),
+       group=stats)+
+  geom_boxplot(position="dodge")+
+  facet_grid(stats~., scales="free")+
+  theme(axis.text.x=element_text(angle = 90, hjust=1))+
+  xlab("Season")+
+  ylab("value")
+
+ggplot(data=ALSP.all.long[which(ALSP.all.long$stats=="IP"|ALSP.all.long$stats=="Age"),], 
+       aes(x=factor(Season), y=val, color=stats),
+       group=stats)+
+  geom_boxplot(position="dodge")+
+  facet_grid(stats~., scales="free")+
+  theme(axis.text.x=element_text(angle = 90, hjust=1))+
+  xlab("Season")+
+  ylab("value")
+
+ggplot(data=ALSP.all.long[which(ALSP.all.long$stats=="ERA"|ALSP.all.long$stats=="FIP"),], 
+       aes(x=factor(Season), y=val, group=interaction(Season, stats), color=stats))+
+  geom_boxplot(position="dodge")+
+  facet_grid(stats~., scales="free")+
+  scale_y_continuous(limits = c(0, 10))+
+  theme(axis.text.x=element_text(angle = 90, hjust=1))+
+  xlab("Season")+
+  ylab("value")
+
+ggplot(data=ALSP.all.long[which(ALSP.all.long$stats=="BABIP"|ALSP.all.long$stats=="WHIP"|ALSP.all.long$stats=="WAR"),], 
+       aes(x=factor(Season), y=val, color=stats),
+       group=stats)+
+  geom_boxplot(position="dodge")+
+  facet_grid(stats~., scales="free")+
+  theme(axis.text.x=element_text(angle = 90, hjust=1))+
+  xlab("Season")+
+  ylab("value")
+
+ggplot(data=ALSP.all.long[which(ALSP.all.long$stats=="LOB" | ALSP.all.long$stats=="HRFB"),], 
+       aes(x=factor(Season), y=val, color=stats),
+       group=stats)+
+  geom_boxplot(position="dodge")+
+  facet_grid(stats~., scales="free")+
+  theme(axis.text.x=element_text(angle = 90, hjust=1))+
+  xlab("Season")+
+  ylab("value")
+# There is a warning message as HRFB is not available prior to 2001.
+```
+
+3.It seems there is not much change of the average of each statistics over the past 30 seasons. How about pitchers who pitched more than 50IP and 100IP?
+```{r, selecting 50IP and 100IP, echo=FALSE}
+ALSP.50IP = AL_SP %>%
+            filter(IP>50)
+ALSP.100IP = AL_SP %>%
+             subset(IP>100)
+ALSP.50IP.long = ALSP.50IP %>%
+                 gather(key=stats, value=val, W, L, G, GS, IP, K9, BB9, HR9, BABIP, LOB, HRFB, FIP, WAR, WHIP, ERA, Age)
+ALSP.100IP.long = ALSP.100IP %>%
+                  gather(key=stats, value=val, W, L, G, GS, IP, K9, BB9, HR9, BABIP, LOB, HRFB, FIP, WAR, WHIP, ERA, Age)
+```
+
+```{r, visualizing summary data_50IP and 100IP, fig.width=10, echo=FALSE}
+ggplot(data=ALSP.50IP.long[which(ALSP.50IP.long$stats=="W"|ALSP.50IP.long$stats=="L"),], 
+       aes(x=factor(Season), y=val, color=stats),
+       group=stats)+
+  geom_boxplot(position="dodge")+ #self note, postition argument by default is "dodge"
+  theme(axis.text.x=element_text(angle = 90, hjust=1))+
+  xlab("Season")+
+  ylab("value")+
+  ggtitle("pitchers who pitched more than 50 IP")
+
+ggplot(data=ALSP.100IP.long[which(ALSP.100IP.long$stats=="W"|ALSP.100IP.long$stats=="L"),], 
+       aes(x=factor(Season), y=val, color=stats),
+       group=stats)+
+  geom_boxplot(position="dodge")+ #self note, postition argument by default is "dodge"
+  theme(axis.text.x=element_text(angle = 90, hjust=1))+
+  xlab("Season")+
+  ylab("value")+
+  ggtitle("pitchers who pitched more than 100 IP")
+```
+
+
+3.1 After seeing this, I'm then interested to see if a pitcher pitched more innings, can that pitcher win more games?
+
+```{r, win/lost ratio vs IP, fig.width=10, echo=FALSE}
+small50IP = AL_SP %>%
+            filter(IP<50) %>%
+            mutate(WL = W/L, IP.id="<50 IP")
+
+large50IP = AL_SP %>%
+            filter(IP>50 & IP<100) %>%
+            mutate(WL = W/L, IP.id="50-100 IP")
+
+large100IP = AL_SP %>%
+             filter(IP>100) %>%
+             mutate(WL = W/L, IP.id=">100IP")
+
+ALSP.WL = rbind(small50IP, large50IP, large100IP) %>%
+          filter(WL>=0)%>%
+          select(Season, Name, IP, IP.id, WL)
+
+ggplot(data=ALSP.WL, 
+       aes(x=IP, y=WL, color=IP.id),
+       group=IP.id)+
+  geom_point()+
+  xlab("Inning Pitched (IP)")+
+  ylab("Win-Loss ratio")+
+  guides(guide_legend(titel="IP group"))
+
+```
+
+It seems there is a slightly increasing trend of win-loss ration versus inning pitched. There better your stamia is, the more win you can earn? Should look more into other more advanced stats to answer this question. Maybe using ERA or FIP is a better way to view this. Let's try...
+
+```{r, ERA vs IP}
+ALSP.IPeffects = rbind(small50IP, large50IP, large100IP) %>%
+                 filter(WL>=0)%>%
+                 select(Season, Name, IP, IP.id, WL, ERA, FIP, WHIP, WAR)
+
+ggplot(data=ALSP.IPeffects, 
+       aes(x=IP, y=ERA, color=IP.id),
+       group=IP.id)+
+  geom_point()+
+  scale_y_continuous(limits = c(0, 10))+
+  xlab("Inning Pitched (IP)")+
+  ylab("ERA")+
+  guides(guide_legend(titel="IP group"))
+
+
+ggplot(data=ALSP.IPeffects, 
+       aes(x=IP, y=FIP, color=IP.id),
+       group=IP.id)+
+  geom_point()+
+  scale_y_continuous(limits = c(0, 10))+
+  xlab("Inning Pitched (IP)")+
+  ylab("FIP")+
+  guides(guide_legend(titel="IP group"))
+
+
+ggplot(data=ALSP.IPeffects, 
+       aes(x=IP, y=WHIP, color=IP.id),
+       group=IP.id)+
+  geom_point()+
+  scale_y_continuous(limits = c(0, 10))+
+  xlab("Inning Pitched (IP)")+
+  ylab("WHIP")+
+  guides(guide_legend(titel="IP group"))
+
+```
+
+
