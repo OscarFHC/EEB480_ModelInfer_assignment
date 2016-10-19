@@ -1,0 +1,149 @@
+---
+title: "Revised Assignment 5: Exercise in Data Visualization_20161019"
+author: "Oscar Feng-Hsun Chang"
+output: html_document
+---
+
+In this assignment, I used baseball statistic data downloaded from [FanGraphs website](http://www.fangraphs.com) simply because I'm interested in baseball. This data include the following statistics of all the starting pitchers in the past 30 seasons (1986-2016). 
+
++ W: game won
++ L: game lost
++ G: game played
++ GS: game played as the starter
++ IP: inning played in the whole season
++ K9: strike out produced per 9 innings
++ BB9: Balls produced per 9 innings
++ BABIP: how many of a batter's balls in play go for hits, excluding home runs
++ LOB: Left on Base percentage,  the percentage of base runners that a pitcher strands on base over the course of a season
++ HRFB: Home Run to Fly Ball rate, ratio of how many home runs are hit against a pitcher for every fly ball they allow
++ FIP: Fielding Independent Pitching, what a player??s ERA would look like over a given period of time if the pitcher were to have experienced league average results on balls in play and league average timing
++ WAR: Wins Above Replacement, an attempt by the sabermetric baseball community to summarize a player's total contributions to their team in one statistic
++ WHIP: Walks plus Hits per Innings Pitched, measures how many base runners a pitcher lets up
++ ERA: Earned Run Average, calculated by dividing a pitcher??s total number of Earned Runs allowed by his total number of Innings Pitched and multiply by nine
++ Age: the pitcher's age at the season
+
+
+### Loading packages and data
+
+First, I loaded the packages that are needed in my further analyses. Note that I use dplyr (I think dplyr is a special version of plyr that is designed specifically for data frame) and tidyr instead of plyr and reshape2. However, in order to demonstrate that I can manage reshape2 package, I duplicate some of my code in two packages. 
+
+```{r, load package, message=FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(plyr)
+library(reshape2)
+library(RCurl)
+```
+
+Now, load the data and skim the data type and data structure.
+
+```{r,load data}
+AL_SP=read.csv(text=getURL("https://raw.githubusercontent.com/OscarFHC/EEB480_ModelInfer_assignment/master/Mod_Infer_hw5_EDA/MLB_AL_SP_1986_2016.csv"), sep=",", header=T, comment.char="#")
+
+str(AL_SP)
+head(AL_SP)
+```
+
+Now use _arrange_ function to sort the data first by Season(year) then by team and Pitcher's name, so that it looks nicer.
+
+```{r, order data}
+AL_SP = AL_SP %>% arrange(Season, Team, Name)
+head(AL_SP)
+```
+
+### Answering couple easy questions
+
+## 1.In the past 30 seasons, how many starting pitchers pitched at least 1 inning and 1 game? I also make these pitchers into a new dataframe (ALSP.all). Note that I used _filter_ in _dplyr_ package, but I can also use _subset_ in _plyr_ package. 
+
+```{r, filter and subset}
+ALSP.all = AL_SP %>%
+           filter(IP>1 & GS>1)
+ALSP.all2 = AL_SP %>%
+           subset(IP>1 & GS>1)
+
+allSP = length(unique(ALSP.all$Name))
+allSP
+```
+
+## 2.Does a pitcher win or lose more games across the past 30 seasons? 
+
+```{r}
+ALSP.all.long = ALSP.all %>%
+                gather(key=stats, value=val, W, L, G, GS, IP, K9, BB9, HR9, BABIP, LOB, HRFB, FIP, WAR, WHIP, ERA, Age)
+
+ggplot(data=ALSP.all.long[which(ALSP.all.long$stats=="W"|ALSP.all.long$stats=="L"),], 
+       aes(x=factor(Season), y=val, color=stats),
+       group=stats)+
+  geom_boxplot(position="dodge")+ #self note, postition argument by default is "dodge"
+  theme(axis.text.x=element_text(angle = 90, hjust=1))+
+  xlab("Season")+
+  ylab("number of games a pitcher Wins or Loses")
+
+```
+
+Supprisingly, on average, a pitcher tend to loss more than win a game, although the differences are not significant. This is probably due to the statistical artifact of this stats that losing a game is a little bit easier than winning a game. To be recorded as a losing pitcher, a pitcher only needs to allow a run which gives the opposing team the lead regardless how many innings that pitcher pitched. But to be recorded as a winning pitcher, a pitcher has to pitch at least 5 innings if the pitcher is the starting pitcher.  
+
+## 3.What is the relationship between ERA (Earned Run Average) and the Win-loss ratio and does this relationship change with IP (number of Inning Pitched). 
+
+To make the win-loss ratio comparable, I divided the ratio by the IP. I also divide the pitcher's into 3 arbitrary groups according to the IP (<50, 50-100, >100)
+
+```{r, echo=FALSE}
+small50IP = AL_SP %>%
+            filter(IP<50, W>0, L>0) %>%
+            mutate(WL9 = W/L/IP, IP.id="<50 IP")
+
+large50IP = AL_SP %>%
+            filter(IP>50 & IP<100, W>0, L>0) %>%
+            mutate(WL9 = W/L/IP, IP.id="50-100 IP")
+
+large100IP = AL_SP %>%
+             filter(IP>100, W>0, L>0) %>%
+             mutate(WL9 = W/L/IP, IP.id=">100IP")
+
+ALSP.WL = rbind(small50IP, large50IP, large100IP) %>%
+          filter(WL9>=0)%>%
+          select(Season, Name, IP, IP.id, WL9, ERA, WAR, BABIP)
+```
+
+```{r, echo=FALSE}
+ggplot(data=ALSP.WL,
+       group=IP.id)+
+  geom_point(aes(x=ERA, y=WL9))+
+  #facet_grid(IP.id~., scales="free")+ # this is not working
+  facet_wrap(~IP.id, nrow=1, scales="free")+
+  xlab("ERA")+
+  ylab("Win-Loss ratio per 9 inning pitched")
+```
+
+To me, this reveals two things. First, giving up more runs does not necessary means losing more, which could make sense as winning a game requires not just allowing less runs but also batting in more runs. Second, the relationship between Win-Loss ratio and ERA, if there is any, looks non-linear, which is even more interesting!
+
+---------------------------------------------------------------------------------------------------------------------------
+
+* Couple questions here.
+1. The scale of x-axis is fixed even I used the "scales="free" " argument in the `facet_grid()` function, so I have to use `facet_wrap()`.  
+2. If I'm interested to see how the relationship change with IP, I guess I should do a 3D plot or a contour instead of a arbitrary grouping. The following code gives me warning message saying 
+"Computation failed in `stat_contour()`:
+dimensions of 'x', 'y' and 'z' do not match "
+But the dimension of the x, y, and z are the same. Please see the following code.
+
+```{r} 
+ggplot(data=ALSP.WL, aes(x=ERA, y=WL9, z=IP))+
+  geom_contour(binwidth = 0.001)+
+  xlab("ERA")+
+  ylab("Win-Loss ratio per 9 inning pitched")
+```
+
+## 4. What is the relationship between BABIP (should reflect how many hit a pitcher allowed per balls in play) and ERA (Earned Run Average) and how does this relationship change with IP. 
+
+```{r}
+ggplot(data=ALSP.WL, aes(x=ERA, y=BABIP),
+       group=IP.id)+
+    geom_point()+
+    stat_smooth(method="lm")+
+    facet_wrap(~IP.id, nrow=1, scales="free")+
+    xlab("BABIP")+
+    ylab("ERA")
+```
+
+There is a more clear positive relationship between BABIP and ERA, indicating that the more hit a pitcher allowed, the more runs the pitcher will allow. This relationship also seems to be different in each group of pitcher. Again, I can use contour plot to avoid arbitrary grouping.

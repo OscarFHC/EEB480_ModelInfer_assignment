@@ -16,10 +16,8 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 
-dat1_raw=read.csv(text=getURL("https://raw.githubusercontent.com/OscarFHC/EEB480_ModelInfer_assignment/master/Mod_Infer_hw6/Parus_major_Wytham_Wood.csv"), 
-                  sep=",", header=T,comment.char="#")
-dat2_raw=read.csv(text=getURL("https://raw.githubusercontent.com/OscarFHC/EEB480_ModelInfer_assignment/master/Mod_Infer_hw6/Thrips_imaginis_Davidson1948.csv"), 
-                  sep=",", header=T,comment.char="#")
+dat1_raw=read.csv(text=getURL("https://raw.githubusercontent.com/OscarFHC/EEB480_ModelInfer_assignment/master/Mod_Infer_hw6/Parus_major_Wytham_Wood.csv"), sep=",", header=T,comment.char="#")
+dat2_raw=read.csv(text=getURL("https://raw.githubusercontent.com/OscarFHC/EEB480_ModelInfer_assignment/master/Mod_Infer_hw6/Thrips_imaginis_Davidson1948.csv"), sep=",", header=T,comment.char="#")
 parus = dat1_raw %>%
   rename(yr=Sample.Date, pop.nat=Population)
 thrip = dat2_raw %>%
