@@ -6,7 +6,8 @@ library(plyr)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
-
+library(gridExtra)
+library(lmtest)
 
 dat1_raw=read.csv(text=getURL("https://raw.githubusercontent.com/OscarFHC/EEB480_ModelInfer_assignment/master/Mod_Infer_hw6/Parus_major_Wytham_Wood.csv"), 
                   sep=",", header=T,comment.char="#")
@@ -188,7 +189,116 @@ K.se
 install.packages("msm")
 library(msm)
 deltamethod(~ -(x1/x2), coef(parus.lm.ricker), vcov(parus.lm.ricker))
+### EX 8
+### EX 9
+parus.lm.ricker=lm(ratio~pop.nat, data=parus.ex3)
+parus.ricker.AIC = AIC(parus.lm.ricker)
 
+parus.lm.gomp=lm(ratio~pop.log, data=parus.ex3)
+parus.gomp.AIC = AIC(parus.lm.gomp)
+
+prob = exp((parus.gomp.AIC - parus.ricker.AIC)/2)
+ # According to the AIC difference of the two models, the Ricker model, when comparing to the Gompertz model, is `r prob` times less likely to explain same amount of variance of the data. 
+ # From the adjust R^2, 
+### EX 9
+### EX 10
+thrip.ex3 = thrip  %>%
+  mutate(pop.log=log(pop.nat)) %>%
+  mutate(ratio=c(log(thrip[,"pop.nat"][2:nrow(thrip)]/thrip[,"pop.nat"][1:(nrow(thrip)-1)]), "NA")) %>%
+  filter(ratio!="NA")
+thrip.ex3[,"ratio"] = as.numeric(thrip.ex3[,"ratio"])
+
+thrip.lm.ricker=lm(ratio~pop.nat, data=thrip.ex3)
+thrip.ricker.AIC = AIC(thrip.lm.ricker)
+
+thrip.lm.gomp=lm(ratio~pop.log, data=thrip.ex3)
+thrip.gomp.AIC = AIC(thrip.lm.gomp)
+
+prob = exp((thrip.gomp.AIC - thrip.ricker.AIC)/2)
+
+acf(thrip.ex3$pop.log)
+acf(thrip.ex3$ratio)
+
+acf(ts(residuals(arima(thrip.ex3$ratio, c(4, 0, 1)))))
+
+thrip.ex10 = thrip.ex3 %>%
+  mutate(ratio.dese4 = ts(residuals(arima(thrip.ex3$ratio, c(4, 0, 1)))))
+  
+adjR = c()
+adjR.1 = c()
+mod = lm(ratio~pop.log + month, data=thrip.ex10)
+adjR = summary(mod)$adj.r.square
+mod.1 = lm(ratio.dese4~pop.log + month, data=thrip.ex10)
+adjR.1 = summary(mod.1)$adj.r.square
+
+for (i in seq(1:11)) {
+  mod = lm(ratio~pop.log + poly(month,i), data=thrip.ex10)
+  mod.1 = lm(ratio.dese4~pop.log + poly(month,i), data=thrip.ex10)
+  adjR = c(adjR, summary(mod)$adj.r.square)
+  adjR.1 = c(adjR.1, summary(mod.1)$adj.r.square)
+}
+
+adjR.lag = c()
+adjR.lag.1 = c()
+mod.lag0 = lm(ratio~pop.log + month, data=thrip.ex10)
+adjR.lag = summary(mod.lag0)$adj.r.square
+mod.lag0.1 = lm(ratio.dese4~pop.log + month, data=thrip.ex10)
+adjR.lag.1 = summary(mod.lag0.1)$adj.r.square
+
+
+mon = ts(thrip.ex3$month)
+for (i in seq(1:11)){
+  mod.lag = lm(ratio~pop.log + month + lag(mon, i), data=thrip.ex10)
+  adjR.lag = c(adjR.lag, summary(mod.lag)$adj.r.square)
+  mod.lag.1 = lm(ratio.dese4~pop.log + month + lag(mon, i), data=thrip.ex10)
+  adjR.lag.1 = c(adjR.lag.1, summary(mod.lag.1)$adj.r.square)
+}
+
+adjR.all = as.data.frame(cbind(adjR, adjR.1, adjR.lag, adjR.lag.1)) %>%
+  gather(key=AdjR2, value=val, adjR, adjR.1, adjR.lag, adjR.lag.1) %>%
+  mutate(num = rep(seq(1:12), 4))
+
+p1 = ggplot(adjR.all[which(adjR.all[,"AdjR2"]=="adjR"),], aes(x=num, y=val))+
+  geom_point()+
+  xlim(1, 12)+
+  ylim(0.2, 0.8)+
+  labs(title="no time lag", x="number of polynomial terms", y="adjust R2")
+p2 = ggplot(adjR.all[which(adjR.all[,"AdjR2"]=="adjR.1"),], aes(x=num, y=val))+
+  geom_point()+
+  xlim(1, 12)+
+  ylim(0.2, 0.8)+
+  labs(title="4 month time lag in growth rate", x="number of polynomial terms", y="adjust R2")
+#p12 = grid.arrange(p1, p2, ncol=2)
+
+p3 = ggplot(adjR.all[which(adjR.all[,"AdjR2"]=="adjR.lag"),], aes(x=num, y=val))+
+  geom_point()+
+  xlim(1, 12.5)+
+  ylim(0.2, 0.8)+
+  labs(title="no time lag", x="number of time lag in month", y="adjust R2")
+p4 = ggplot(adjR.all[which(adjR.all[,"AdjR2"]=="adjR.lag.1"),], aes(x=num, y=val))+
+  geom_point()+
+  xlim(1, 12.5)+
+  ylim(0.2, 0.8)+
+  labs(title="4 month time lag in growth rate", x="number of time lag in month", y="adjust R2")
+#p34 = grid.arrange(p3, p4, ncol=2)
+
+pall = grid.arrange(p1, p2, p3, p4, ncol=2)
+### EX 10
+### EX 11
+ #10.a
+bestmod = lm(ratio~pop.log + poly(month,11), data=thrip.ex10)
+plot(bestmod)
+bptest(bestmod)
+ #10.b
+shapiro.test(residuals(bestmod))
+ #10.c
+    # 30, 39, 78
+ #10.d
+dwtest(bestmod)
+ #10.e
+summary(lm(ratio~pop.log + poly(month,11), data=thrip.ex10))
+
+### EX 11
 
 
 

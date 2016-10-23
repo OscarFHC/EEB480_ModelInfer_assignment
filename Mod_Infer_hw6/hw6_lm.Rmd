@@ -6,14 +6,12 @@ output:
   html_document:
     code_folding: show
     highlight: haddock
-    keep_md: yes
-    number_sections: true
+    number_sections: False
     theme: yeti
     toc: true
     toc_float:
       collapsed: false
       smooth_scroll: true
-      toc_depth: 3
 ---
 
 First I read in data from my own GitHub repository 
@@ -24,6 +22,7 @@ library(plyr)
 library(dplyr)
 library(tidyr)
 library(ggplot2)
+library(gridExtra)
 
 dat1_raw=read.csv(text=getURL("https://raw.githubusercontent.com/OscarFHC/EEB480_ModelInfer_assignment/master/Mod_Infer_hw6/Parus_major_Wytham_Wood.csv"), sep=",", header=T,comment.char="#")
 dat2_raw=read.csv(text=getURL("https://raw.githubusercontent.com/OscarFHC/EEB480_ModelInfer_assignment/master/Mod_Infer_hw6/Thrips_imaginis_Davidson1948.csv"), sep=",", header=T,comment.char="#")
@@ -39,7 +38,7 @@ thrip = dat2_raw %>%
 ```
 
 
-## Exercise 1
+# Exercise 1
 
 Here I plot the time series of each data set in untransformed population size (pop.nat), squared root-transformed population size (pop.sqrt) and log-transformed population size (pop.log). 
 
@@ -72,7 +71,7 @@ ggplot(data=thrip.ex1, aes(x=time, y=pop), group=variable)+
 
 Here I found that, among the three transformations of the population size, the dynamics of parus population (the first figure) are more similar than those of thrip population. This is probably due to the fact the parus population size is more normally distributed (the parus population is almost normally distributed, p-value of Shapiro-Wilk normality test is `r shapiro.test(parus[,"pop.nat"])$p.value`), but the thrip population size distribution is highly right skewed. 
 
-## Exercise 2
+# Exercise 2
 
 Here I plot the relationships between $log\frac{N~t~}{N~t-1~}$ and $log(N~t-1~)$ (left) as well as $log\frac{N~t~}{N~t-1~}$ and ${N~t-1~}$ (right) of parus and thrip population size. 
 
@@ -113,7 +112,7 @@ ggplot(data=thrip.ex2, aes(x=pop, y=as.numeric(ratio)), group=variable)+
 
 The thrip data only shows a slightly negative trend when the population size is log-transformed. Although there is also a negative relationship between per capita growth rate versus population size, it could be dominated by those measurements of large population size. This implies it might not be proper to fit the Ricker model to the thrip data as the error of the population size of thrip is probably not normally distributed. 
 
-## Exercise 3 and 4
+# Exercise 3 and 4
 
 ```{r}
 parus.ex3 = parus  %>%
@@ -157,7 +156,7 @@ thrip.K.gomp=exp(thrip.lm.gomp$coefficients[1]/-(thrip.lm.gomp$coefficients[2]))
 
 Both the intrinsic growth rate (`r thrip.r.ricker` in the Ricker model vs `r thrip.r.gomp` in the Gompertz model) and carrying capacity (`r thrip.K.ricker` in the Ricker model vs `r thrip.K.gomp` in the Gompertz model) estimated by both model are so different from each other. Although the Gompertz model perfomes slightly better than the Ricker model and returns a statistically significant slope, both model have poor explanation to the variation of per capita growth rate. Given this data set, density dependency probably does not exist, or at least not strong. 
 
-## Exercise 5
+# Exercise 5
 
 Extract the fitted values of each model using fitted or predict and plot these in the same manner you did above.
 
@@ -186,7 +185,7 @@ ggplot(data=thrip.ex5, group=variable)+
 ```
 
 
-## Exercise 6
+# Exercise 6
 
 ```{r}
 summary(parus.lm.ricker)
@@ -195,7 +194,7 @@ anova(parus.lm.ricker)
 
 The $t-test$ performed on the slope estimation is identical to the $F-test$ performed on the model. This means including population size to explain the variation of per capita growth rate can reduce the residual sum of squares with a high probability (`r 1-round(summary(parus.lm.ricker)$coefficients[2,4],5)`). This probabiilty is also the probability of observing the effects of population size on the per capita growth rate to be `r round(summary(parus.lm.ricker)$coefficients[2,1],3)`.  
 
-## Exercise 7
+# Exercise 7
 
 ```{r}
 parus.ex7=parus.ex5 %>%
@@ -217,7 +216,7 @@ ggplot(data=parus.ex7, aes(x=pop, y=as.numeric(ratio)))+
 
 The shaded area (standard error of the linear model) gradually increase with the level of confidence interval specified. This is implies the increase of making Type I error when increasing the specified confidence interval. 
 
-## Exercise 8
+# Exercise 8
 
 Calculate the standard error of carrying capacity by the delta method.
 
@@ -251,6 +250,134 @@ K.se
 library(msm)
 deltamethod(~ -(x1/x2), coef(parus.lm.ricker), vcov(parus.lm.ricker))
 ```
+
+# Exercise 9
+
+```{r, AIC}
+parus.lm.ricker=lm(ratio~pop.nat, data=parus.ex3)
+parus.ricker.AIC = AIC(parus.lm.ricker)
+
+parus.lm.gomp=lm(ratio~pop.log, data=parus.ex3)
+parus.gomp.AIC = AIC(parus.lm.gomp)
+
+prob = exp((parus.gomp.AIC - parus.ricker.AIC)/2)
+```
+
+
+According to the AIC difference of the two models, the Ricker model, when comparing to the Gompertz model, is `r prob` times less likely to explain same amount of variance of the data.  
+From the adjust $R^2$, we see that the Gompertz model explain about `r round(summary(parus.lm.gomp)$adj.r.squared - summary(parus.lm.ricker)$adj.r.squared, 4)*100` % more variance than the Ricker model.  
+
+# Exercise 10
+
+## Ex 10.1 Gompertz model and the Ricker model. 
+
+```{r, adjusr R2}
+thrip.ex3 = thrip  %>%
+  mutate(pop.log=log(pop.nat)) %>%
+  mutate(ratio=c(log(thrip[,"pop.nat"][2:nrow(thrip)]/thrip[,"pop.nat"][1:(nrow(thrip)-1)]), "NA")) %>%
+  filter(ratio!="NA")
+thrip.ex3[,"ratio"] = as.numeric(thrip.ex3[,"ratio"])
+
+thrip.lm.ricker=lm(ratio~pop.nat, data=thrip.ex3)
+thrip.ricker.AIC = AIC(thrip.lm.ricker)
+
+thrip.lm.gomp=lm(ratio~pop.log, data=thrip.ex3)
+thrip.gomp.AIC = AIC(thrip.lm.gomp)
+
+prob = exp((thrip.gomp.AIC - thrip.ricker.AIC)/2)
+```
+
+Similarily, from the adjust $R^2$, we see that the Gompertz model explain about `r round(summary(thrip.lm.gomp)$adj.r.squared - summary(thrip.lm.ricker)$adj.r.squared, 4)*100` % more variance than the Ricker model. 
+
+## Ex 10.2 Adjust $R^2$
+
+Exploring the adjust $R^2$ value with different combination of independent variables in the Gompertz model.
+
+```{r, acf}
+acf(thrip.ex3$pop.log)
+acf(thrip.ex3$ratio)
+```
+
+From the plot of autocorrelation function, we see that there is a 4-month seasonality pattern in both population density (pop.log) and the growth rate (ratio). 
+
+```{r}
+
+acf(ts(residuals(arima(thrip.ex3$ratio, c(4, 0, 1)))))
+```
+
+After removing the temporal autocorrelation (time lag=4), the ACF plot looks more clean.  
+So I fit the Gompertz model with month ans it's polynomial terms being the addition variables as well as fitting those independent varaible to the "deseasoned" dependent variable. 
+
+```{r, adj R2}
+thrip.ex10 = thrip.ex3 %>%
+  mutate(ratio.dese4 = ts(residuals(arima(thrip.ex3$ratio, c(4, 0, 1)))))
+  
+adjR = c()
+adjR.1 = c()
+mod = lm(ratio~pop.log + month, data=thrip.ex10)
+adjR = summary(mod)$adj.r.square
+mod.1 = lm(ratio.dese4~pop.log + month, data=thrip.ex10)
+adjR.1 = summary(mod.1)$adj.r.square
+
+for (i in seq(1:11)) {
+  mod = lm(ratio~pop.log + poly(month,i), data=thrip.ex10)
+  mod.1 = lm(ratio.dese4~pop.log + poly(month,i), data=thrip.ex10)
+  adjR = c(adjR, summary(mod)$adj.r.square)
+  adjR.1 = c(adjR.1, summary(mod.1)$adj.r.square)
+}
+
+adjR.lag = c()
+adjR.lag.1 = c()
+mod.lag0 = lm(ratio~pop.log + month, data=thrip.ex10)
+adjR.lag = summary(mod.lag0)$adj.r.square
+mod.lag0.1 = lm(ratio.dese4~pop.log + month, data=thrip.ex10)
+adjR.lag.1 = summary(mod.lag0.1)$adj.r.square
+
+
+mon = ts(thrip.ex3$month)
+for (i in seq(1:11)){
+  mod.lag = lm(ratio~pop.log + month + lag(mon, i), data=thrip.ex10)
+  adjR.lag = c(adjR.lag, summary(mod.lag)$adj.r.square)
+  mod.lag.1 = lm(ratio.dese4~pop.log + month + lag(mon, i), data=thrip.ex10)
+  adjR.lag.1 = c(adjR.lag.1, summary(mod.lag.1)$adj.r.square)
+}
+
+adjR.all = as.data.frame(cbind(adjR, adjR.1, adjR.lag, adjR.lag.1)) %>%
+  gather(key=AdjR2, value=val, adjR, adjR.1, adjR.lag, adjR.lag.1) %>%
+  mutate(num = rep(seq(1:12), 4))
+
+p1 = ggplot(adjR.all[which(adjR.all[,"AdjR2"]=="adjR"),], aes(x=num, y=val))+
+  geom_point()+
+  xlim(1, 12)+
+  ylim(0.2, 0.8)+
+  labs(title="no time lag", x="number of polynomial terms", y="adjust R2")
+p2 = ggplot(adjR.all[which(adjR.all[,"AdjR2"]=="adjR.1"),], aes(x=num, y=val))+
+  geom_point()+
+  xlim(1, 12)+
+  ylim(0.2, 0.8)+
+  labs(title="4 month time lag in growth rate", x="number of polynomial terms", y="adjust R2")
+#p12 = grid.arrange(p1, p2, ncol=2)
+
+p3 = ggplot(adjR.all[which(adjR.all[,"AdjR2"]=="adjR.lag"),], aes(x=num, y=val))+
+  geom_point()+
+  xlim(1, 12.5)+
+  ylim(0.2, 0.8)+
+  labs(title="no time lag", x="number of time lag in month", y="adjust R2")
+p4 = ggplot(adjR.all[which(adjR.all[,"AdjR2"]=="adjR.lag.1"),], aes(x=num, y=val))+
+  geom_point()+
+  xlim(1, 12.5)+
+  ylim(0.2, 0.8)+
+  labs(title="4 month time lag in growth rate", x="number of time lag in month", y="adjust R2")
+#p34 = grid.arrange(p3, p4, ncol=2)
+
+pall = grid.arrange(p1, p2, p3, p4, ncol=2)
+```
+
+```{r, echo=FALSE}
+r2 = summary(lm(ratio~pop.log + poly(month,11), data=thrip.ex10))$adj.r.square
+```
+
+From the figure we see that, in terms of adjust $R^2$, the model with 11 polynomial terms of month being the independent variable and non deseasoned growth rate being the dependent variables is the one giving me highest adjust $R^2$ (`r round(r2,3)`). However, having 11 polynomial terms is pretty hard to interpret. 
 
 
 

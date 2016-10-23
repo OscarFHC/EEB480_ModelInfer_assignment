@@ -499,5 +499,21 @@ deltamethod(~ -(x1/x2), coef(parus.lm.ricker), vcov(parus.lm.ricker))
 ## [1] 12.57648
 ```
 
+## Exercise 9
+
+
+```r
+parus.lm.ricker=lm(ratio~pop.nat, data=parus.ex3)
+parus.ricker.AIC = AIC(parus.lm.ricker)
+
+parus.lm.gomp=lm(ratio~pop.log, data=parus.ex3)
+parus.gomp.AIC = AIC(parus.lm.gomp)
+
+prob = exp((parus.gomp.AIC - parus.ricker.AIC)/2)
+```
+
+
+According to the AIC difference of the two models, the Ricker model, when comparing to the Gompertz model, is 0.3583599 times less likely to explain same amount of variance of the data.  
+From the adjust R^2, 
 
 
