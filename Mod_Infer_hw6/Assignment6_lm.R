@@ -113,7 +113,7 @@ thrip.r.ricker=thrip.lm.ricker$coefficients[1]
 thrip.K.ricker=-(thrip.lm.ricker$coefficients[1]/thrip.lm.ricker$coefficients[2])
   
   
-thrip.lm.gomp=lm(ratio~pop.log, data=thrip.ex3)
+thrip.lm.gomp=
   summary(thrip.lm.gomp)
 thrip.r.gomp=-log(-thrip.lm.gomp$coefficients[2])
 thrip.K.gomp=exp(thrip.lm.gomp$coefficients[1]/-(thrip.lm.gomp$coefficients[2]))
@@ -186,7 +186,7 @@ K.se = sqrt(jacobian(fun2, B) %*% vcovB %*% t(jacobian(fun2, B)))
 K.se
 
 # The following package allows me to calculate the standard error of a parameter that is being transformed from the coefficients estimated in a model.
-install.packages("msm")
+#install.packages("msm")
 library(msm)
 deltamethod(~ -(x1/x2), coef(parus.lm.ricker), vcov(parus.lm.ricker))
 ### EX 8
@@ -285,21 +285,30 @@ p4 = ggplot(adjR.all[which(adjR.all[,"AdjR2"]=="adjR.lag.1"),], aes(x=num, y=val
 pall = grid.arrange(p1, p2, p3, p4, ncol=2)
 ### EX 10
 ### EX 11
- #10.a
-bestmod = lm(ratio~pop.log + poly(month,11), data=thrip.ex10)
-plot(bestmod)
-bptest(bestmod)
- #10.b
-shapiro.test(residuals(bestmod))
- #10.c
+ #11.a
+plot(parus.lm.gomp)
+bptest(parus.lm.gomp)
+ #11.b
+shapiro.test(residuals(parus.lm.gomp))
+ #11.c
     # 30, 39, 78
- #10.d
-dwtest(bestmod)
- #10.e
-summary(lm(ratio~pop.log + poly(month,11), data=thrip.ex10))
-
+ #11.d
+dwtest(parus.lm.gomp)
+ #11.e
+summary(parus.lm.gomp)
 ### EX 11
+### EX 12
+ # basically repeat EX11
+### EX 12
+### EX 13
 
+set.seed(543)
+train.id = sample(seq(1: nrow(thrip.ex3)), nrow(thrip.ex3)/2, replace=FALSE)
+train.mod = lm(ratio~pop.log, data=thrip.ex3[train.id,])
+
+y.pred = predict(train.mod, newdata=thrip.ex3[-train.id,])
+plot(thrip.ex3[-train.id,"ratio"]~y.pred, xlab="predicted value", ylab="observed value")
+summary(lm(y.pred~thrip.ex3[-train.id,"ratio"]))
 
 
 

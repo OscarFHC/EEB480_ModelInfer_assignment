@@ -23,6 +23,7 @@ library(dplyr)
 library(tidyr)
 library(ggplot2)
 library(gridExtra)
+library(lmtest)
 
 dat1_raw=read.csv(text=getURL("https://raw.githubusercontent.com/OscarFHC/EEB480_ModelInfer_assignment/master/Mod_Infer_hw6/Parus_major_Wytham_Wood.csv"), sep=",", header=T,comment.char="#")
 dat2_raw=read.csv(text=getURL("https://raw.githubusercontent.com/OscarFHC/EEB480_ModelInfer_assignment/master/Mod_Infer_hw6/Thrips_imaginis_Davidson1948.csv"), sep=",", header=T,comment.char="#")
@@ -133,7 +134,7 @@ parus.r.gomp=-log(-parus.lm.gomp$coefficients[2])
 parus.K.gomp=exp(parus.lm.gomp$coefficients[1]/-(parus.lm.gomp$coefficients[2]))
 ```
 
-The carrying capacity of parus is estimated to be `r parus.K.ricker` by the Ricker model and `r parus.K.gomp` by the Gompertz model. The two estimates of carrying capacity are pretty similar. However, the two estimates of the intrinsic grwoth rate (`r parus.r.ricker` by the Ricker model and `r parus.r.gomp` by the Gompertz model) in two model differ more than one order of magnitude. This is intriguing because the patters of the two relationships are so similar. From these results, I think the density dependency exists but the way to model density dependency largely affects the intrinsic growth rate and carrying capacity. 
+In the Parus data set, the carrying capacity of parus is estimated to be `r parus.K.ricker` by the Ricker model and `r parus.K.gomp` by the Gompertz model. The two estimates of carrying capacity are pretty similar. However, the two estimates of the intrinsic grwoth rate (`r parus.r.ricker` by the Ricker model and `r parus.r.gomp` by the Gompertz model) in two model differ more than one order of magnitude. This is intriguing because the patters of the two relationships are so similar. From these results, I think the density dependency exists but the way to model density dependency largely affects the intrinsic growth rate and carrying capacity. 
 
 ```{r}
 thrip.ex3 = thrip  %>%
@@ -154,7 +155,7 @@ thrip.r.gomp=-log(-thrip.lm.gomp$coefficients[2])
 thrip.K.gomp=exp(thrip.lm.gomp$coefficients[1]/-(thrip.lm.gomp$coefficients[2]))
 ```
 
-Both the intrinsic growth rate (`r thrip.r.ricker` in the Ricker model vs `r thrip.r.gomp` in the Gompertz model) and carrying capacity (`r thrip.K.ricker` in the Ricker model vs `r thrip.K.gomp` in the Gompertz model) estimated by both model are so different from each other. Although the Gompertz model perfomes slightly better than the Ricker model and returns a statistically significant slope, both model have poor explanation to the variation of per capita growth rate. Given this data set, density dependency probably does not exist, or at least not strong. 
+In the Thrips data set, both the intrinsic growth rate (`r thrip.r.ricker` in the Ricker model vs `r thrip.r.gomp` in the Gompertz model) and carrying capacity (`r thrip.K.ricker` in the Ricker model vs `r thrip.K.gomp` in the Gompertz model) estimated by both model are so different from each other. Although the Gompertz model perfomes slightly better than the Ricker model and returns a statistically significant slope, both model have poor explanation to the variation of per capita growth rate. Given this data set, density dependency probably does not exist, or at least not strong. 
 
 # Exercise 5
 
@@ -294,15 +295,15 @@ Similarily, from the adjust $R^2$, we see that the Gompertz model explain about 
 Exploring the adjust $R^2$ value with different combination of independent variables in the Gompertz model.
 
 ```{r, acf}
-acf(thrip.ex3$pop.log)
-acf(thrip.ex3$ratio)
+acf(thrip.ex3$pop.log, main="autocorrelation plot of population density")
+acf(thrip.ex3$ratio, main="autocorrelation plot of growth rate")
 ```
 
 From the plot of autocorrelation function, we see that there is a 4-month seasonality pattern in both population density (pop.log) and the growth rate (ratio). 
 
 ```{r}
 
-acf(ts(residuals(arima(thrip.ex3$ratio, c(4, 0, 1)))))
+acf(ts(residuals(arima(thrip.ex3$ratio, c(4, 0, 1)))), main="autocorrelation plot of growth rate after removing seasonality")
 ```
 
 After removing the temporal autocorrelation (time lag=4), the ACF plot looks more clean.  
@@ -314,9 +315,9 @@ thrip.ex10 = thrip.ex3 %>%
   
 adjR = c()
 adjR.1 = c()
-mod = lm(ratio~pop.log + month, data=thrip.ex10)
+mod = lm(ratio~pop.log, data=thrip.ex10)
 adjR = summary(mod)$adj.r.square
-mod.1 = lm(ratio.dese4~pop.log + month, data=thrip.ex10)
+mod.1 = lm(ratio.dese4~pop.log, data=thrip.ex10)
 adjR.1 = summary(mod.1)$adj.r.square
 
 for (i in seq(1:11)) {
@@ -349,25 +350,25 @@ adjR.all = as.data.frame(cbind(adjR, adjR.1, adjR.lag, adjR.lag.1)) %>%
 p1 = ggplot(adjR.all[which(adjR.all[,"AdjR2"]=="adjR"),], aes(x=num, y=val))+
   geom_point()+
   xlim(1, 12)+
-  ylim(0.2, 0.8)+
-  labs(title="no time lag", x="number of polynomial terms", y="adjust R2")
+  ylim(0.0, 0.8)+
+  labs(title="original growth rate", x="number of polynomial terms", y="adjust R2")
 p2 = ggplot(adjR.all[which(adjR.all[,"AdjR2"]=="adjR.1"),], aes(x=num, y=val))+
   geom_point()+
   xlim(1, 12)+
-  ylim(0.2, 0.8)+
-  labs(title="4 month time lag in growth rate", x="number of polynomial terms", y="adjust R2")
+  ylim(0.0, 0.8)+
+  labs(title="removing 4-month seasonality in growth rate", x="number of polynomial terms", y="adjust R2")
 #p12 = grid.arrange(p1, p2, ncol=2)
 
 p3 = ggplot(adjR.all[which(adjR.all[,"AdjR2"]=="adjR.lag"),], aes(x=num, y=val))+
   geom_point()+
   xlim(1, 12.5)+
-  ylim(0.2, 0.8)+
-  labs(title="no time lag", x="number of time lag in month", y="adjust R2")
+  ylim(0.0, 0.8)+
+  labs(title="original growth rate", x="number of time lag in month", y="adjust R2")
 p4 = ggplot(adjR.all[which(adjR.all[,"AdjR2"]=="adjR.lag.1"),], aes(x=num, y=val))+
   geom_point()+
   xlim(1, 12.5)+
-  ylim(0.2, 0.8)+
-  labs(title="4 month time lag in growth rate", x="number of time lag in month", y="adjust R2")
+  ylim(0.0, 0.8)+
+  labs(title="removing 4-month seasonality in growth rate", x="number of time lag in month", y="adjust R2")
 #p34 = grid.arrange(p3, p4, ncol=2)
 
 pall = grid.arrange(p1, p2, p3, p4, ncol=2)
@@ -378,6 +379,120 @@ r2 = summary(lm(ratio~pop.log + poly(month,11), data=thrip.ex10))$adj.r.square
 ```
 
 From the figure we see that, in terms of adjust $R^2$, the model with 11 polynomial terms of month being the independent variable and non deseasoned growth rate being the dependent variables is the one giving me highest adjust $R^2$ (`r round(r2,3)`). However, having 11 polynomial terms is pretty hard to interpret. 
+
+# Exercise 11
+
+## 11.a
+
+```{r, heteroskedasticity}
+plot(parus.lm.gomp)
+#bptest(parus.lm.gomp)
+```
+
+From the first (residuals on the y axis against fitted values on the x) and the second (normal qqnorm plot) diagnostic plots, we see not clear structure of the residuals except couple points (23, 21, 16). The Breusch-Pagan test also show nonsignificant results, which indicates that there is no statistically significant structure in the residuals. 
+
+> The bptest is working when not in Rmd code, but when in Rmd code it generates a erroe message "Error in y - z$residuals :"  But in the next exercise, this error does not appear.
+
+## 11.b
+```{r, normality of residuals}
+shapiro.test(residuals(parus.lm.gomp))
+hist(residuals(parus.lm.gomp), breaks=20)
+```
+
+The Shapiro-Wilk test also shows a nonsignificant result. This means the residuals are normally distributed. From the histogram of the residuals, we can see that the distribution really looks like a normal distribution. 
+
+## 11.c
+
+From the fouth diagnostic plot (Residuals vs Leverage plot), point 23, 21 and 16 are the ones that have larger influences, but the leverage of ther three are rather small. The influences of the three could be fairly small. 
+
+## 11.d
+
+```{r, temporal autocorrelation}
+#dwtest(parus.lm.gomp)
+```
+
+The residuals of the Gompertz model does not show temporal autocorrelation.  
+
+> The dwtest is working when not in Rmd code, but when in Rmd code it generates a erroe message "Error in y - z$residuals :" But in the next exercise, this error does not appear. 
+
+## 11.e
+
+```{r, biological validation}
+summary(parus.lm.gomp)
+
+library(msm)
+parus.r.se = deltamethod(~ -log(-x2), coef(parus.lm.gomp), vcov(parus.lm.gomp))
+parus.K.se = deltamethod(~ exp(x1/-(x2)), coef(parus.lm.gomp), vcov(parus.lm.gomp))
+```
+
+In the Gompertz model, the carrying capacity is estimated to be `r round(parus.K.gomp,3)` with standard error about `r round(parus.K.se,3)`. This number is biologically reasonable. However, the intrinsic growth rate is the Gompertz model is estimated to be `r round(parus.r.gomp, 3)` with standard error about `r round(parus.r.se, 3)`. The standard error of intrinsic growth rate is large so that the confidence interval of intrinsic growth rate overlaps 0. This suggests that the intrinsic growth rate estimated in the Gompertz model is not significantly different from 0, which is biologically not feasible. 
+
+# Exercise 12
+
+## 12.a
+
+```{r, thrip model checking}
+plot(thrip.lm.gomp)
+bptest(thrip.lm.gomp)
+```
+
+From the first diagnostic plot (residuals on the y axis against fitted values on the x), we see that residuals are more aggregated when fitted values are large. The normal qqnorm plot (the second diagnostic plot), however does not show a non normally distributed pattern to me. This suggests that there could exist a structure in the residuals. 
+
+## 12.b
+```{r, thrip normality of residuals}
+shapiro.test(residuals(thrip.lm.gomp))
+hist(residuals(thrip.lm.gomp), breaks=20)
+```
+
+The Shapiro-Wilk test also shows a barely significant result. This means the residuals are not normally distributed, althought the histogram does look like a normal distribution. 
+
+> Here I have a question. Should we trust the statistical test or the shape of the histogram when judging if a variable follows a normal distribution?  
+
+## 12.c
+
+From the fouth diagnostic plot (Residuals vs Leverage plot), point 31, 8 and 79 are the ones that have larger influences (larger y value), and the leverage of them are also large. The influences of these three points could thus be large.  
+
+## 12.d
+
+```{r, thrip temporal autocorrelation}
+dwtest(thrip.lm.gomp)
+```
+
+The residuals of the Gompertz model show a significant temporal autocorrelation signal. This can also be found when I plot the ACF plot in exercise 10. There exists a 4 month cycle in the time series data. 
+
+## 12.e
+
+```{r, thrip biological validation}
+summary(thrip.lm.gomp)
+
+library(msm)
+thrip.r.se = deltamethod(~ -log(-x2), coef(thrip.lm.gomp), vcov(thrip.lm.gomp))
+thrip.K.se = deltamethod(~ exp(x1/-(x2)), coef(thrip.lm.gomp), vcov(thrip.lm.gomp))
+```
+
+In the Gompertz model, the carrying capacity is estimated to be `r round(thrip.K.gomp,3)` with standard error about `r round(thrip.K.se,3)`. This number is biologically reasonable. The intrinsic growth rate is the Gompertz model is estimated to be `r round(thrip.r.gomp, 3)` with standard error about `r round(thrip.r.se, 3)`. The standard error of intrinsic growth rate is large so that the confidence interval of intrinsic growth rate overlaps 0. This suggests that the intrinsic growth rate estimated in the Gompertz model is not significantly different from 0, which is biologically not feasible. 
+
+# Exercise 13
+
+```{r, thrip cross validation}
+set.seed(543)
+train.id = sample(seq(1: nrow(thrip.ex3)), nrow(thrip.ex3)/2, replace=FALSE)
+train.mod = lm(ratio~pop.log, data=thrip.ex3[train.id,])
+y.pred = predict(train.mod, newdata=thrip.ex3[-train.id,])
+
+plot(thrip.ex3[-train.id,"ratio"]~y.pred, xlab="predicted growth rate", ylab="observed growth rate")
+summary(lm(y.pred~thrip.ex3[-train.id,"ratio"]))
+```
+
+
+Here I randomly chose Using half of the data to estimate carrying capacity (K) and intrinsic growth rate (r) and then use these estimated K and r to predict growth rate in the other half of the data. When plotted the observed growth rate against the predicted growth rate, the two are not matching with each other well. Predicted growth rates only explain `r 100*round(summary(lm(y.pred~thrip.ex3[-train.id,"ratio"]))$adj.r.square,4)`% of the variance of observed growth rate. This is not much better than fitting the whole data set (adjust $R^2$ is `r round(summary(thrip.lm.gomp)$adj.r.square, 3)`). I suspect this is due to the fact that this linear model *per se* does not capture the 4-month seasonality.    
+
+
+# Exercise 14
+
+In the thrip data set, there is a clear 4-month cycle in the population density and growth rate (see the ACF figures in exercise 10.2). I suspect this is the main reason why linear model does not preform well in this data set. However, even after I remove the 4-month seasonality and refit the linear model (the left two panel of the final figure in exercise 10.2), the adjust $R^2$ is even lower than the model with fitting the original growth rate. Maybe I should remove the seasonality in both growth rate and population density?
+
+
 
 
 
