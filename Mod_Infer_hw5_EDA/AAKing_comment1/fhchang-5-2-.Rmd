@@ -4,7 +4,7 @@ author: "Oscar Feng-Hsun Chang"
 output: html_document
 ---
 
-In this assignment, I used baseball statistic data downloaded from [FanGraphs website](http://www.fangraphs.com) simply because I'm interested in baseball. This data include the following statistics of all the starting pitchers in the past 30 seasons (1986-2016). 
+In this assignment, I used baseball statistic data downloaded from [FanGraphs website](http://www.fangraphs.com) simply because I'm interested in baseball. This data include the following statistics of all the starting pitchers in the past 30 seasons (1986-2016).
 
 + W: game won
 + L: game lost
@@ -25,7 +25,9 @@ In this assignment, I used baseball statistic data downloaded from [FanGraphs we
 
 ### Loading packages and data
 
-First, I loaded the packages that are needed in my further analyses. Note that I use dplyr (I think dplyr is a special version of plyr that is designed specifically for data frame) and tidyr instead of plyr and reshape2. However, in order to demonstrate that I can manage reshape2 package, I duplicate some of my code in two packages. 
+First, I loaded the packages that are needed in my further analyses. Note that I use dplyr (I think dplyr is a special version of plyr that is designed specifically for data frame) and tidyr instead of plyr and reshape2. However, in order to demonstrate that I can manage reshape2 package, I duplicate some of my code in two packages.
+
+> Just use whichever you prefer: there is no need to do the same thing twice.
 
 ```{r, load package, message=FALSE}
 library(ggplot2)
@@ -45,6 +47,8 @@ str(AL_SP)
 head(AL_SP)
 ```
 
+> Don't show this to your reader unless you want them to see it. If you want a record of these procedures, hide them from the reader using chunk option `include=FALSE`.
+
 Now use _arrange_ function to sort the data first by Season(year) then by team and Pitcher's name, so that it looks nicer.
 
 ```{r, order data}
@@ -54,7 +58,7 @@ head(AL_SP)
 
 ### Answering couple easy questions
 
-## 1.In the past 30 seasons, how many starting pitchers pitched at least 1 inning and 1 game? I also make these pitchers into a new dataframe (ALSP.all). Note that I used _filter_ in _dplyr_ package, but I can also use _subset_ in _plyr_ package. 
+## 1.In the past 30 seasons, how many starting pitchers pitched at least 1 inning and 1 game? I also make these pitchers into a new dataframe (ALSP.all). Note that I used _filter_ in _dplyr_ package, but I can also use _subset_ in _plyr_ package.
 
 ```{r, filter and subset}
 ALSP.all = AL_SP %>%
@@ -66,13 +70,15 @@ allSP = length(unique(ALSP.all$Name))
 allSP
 ```
 
-## 2.Does a pitcher win or lose more games across the past 30 seasons? 
+> Comments? What do you compare this figure to?
+
+## 2.Does a pitcher win or lose more games across the past 30 seasons?
 
 ```{r}
 ALSP.all.long = ALSP.all %>%
                 gather(key=stats, value=val, W, L, G, GS, IP, K9, BB9, HR9, BABIP, LOB, HRFB, FIP, WAR, WHIP, ERA, Age)
 
-ggplot(data=ALSP.all.long[which(ALSP.all.long$stats=="W"|ALSP.all.long$stats=="L"),], 
+ggplot(data=ALSP.all.long[which(ALSP.all.long$stats=="W"|ALSP.all.long$stats=="L"),],
        aes(x=factor(Season), y=val, color=stats),
        group=stats)+
   geom_boxplot(position="dodge")+ #self note, postition argument by default is "dodge"
@@ -82,9 +88,11 @@ ggplot(data=ALSP.all.long[which(ALSP.all.long$stats=="W"|ALSP.all.long$stats=="L
 
 ```
 
+> What does this plot tell us? Why do we care about the distribution of wins/losses for a given year?
+
 Supprisingly, on average, a pitcher tend to loss more than win a game, although the differences are not significant. This is probably due to the statistical artifact of this stats that losing a game is a little bit easier than winning a game. To be recorded as a losing pitcher, a pitcher only needs to allow a run which gives the opposing team the lead regardless how many innings that pitcher pitched. But to be recorded as a winning pitcher, a pitcher has to pitch at least 5 innings if the pitcher is the starting pitcher.  
 
-## 3.What is the relationship between ERA (Earned Run Average) and the Win-loss ratio and does this relationship change with IP (number of Inning Pitched). 
+## 3.What is the relationship between ERA (Earned Run Average) and the Win-loss ratio and does this relationship change with IP (number of Inning Pitched).
 
 To make the win-loss ratio comparable, I divided the ratio by the IP. I also divide the pitcher's into 3 arbitrary groups according to the IP (<50, 50-100, >100)
 
@@ -122,19 +130,49 @@ To me, this reveals two things. First, giving up more runs does not necessary me
 
 * Couple questions here.
 1. The scale of x-axis is fixed even I used the "scales="free" " argument in the `facet_grid()` function, so I have to use `facet_wrap()`.  
-2. If I'm interested to see how the relationship change with IP, I guess I should do a 3D plot or a contour instead of a arbitrary grouping. The following code gives me warning message saying 
+
+> Yes, but is that a question?
+
+2. If I'm interested to see how the relationship change with IP, I guess I should do a 3D plot or a contour instead of a arbitrary grouping. The following code gives me warning message saying
 "Computation failed in `stat_contour()`:
 dimensions of 'x', 'y' and 'z' do not match "
 But the dimension of the x, y, and z are the same. Please see the following code.
 
-```{r} 
+> The data need to be in a grid format for `geom_contour`. Perhaps try binning the data?
+
+```{r eval=FALSE}
 ggplot(data=ALSP.WL, aes(x=ERA, y=WL9, z=IP))+
   geom_contour(binwidth = 0.001)+
   xlab("ERA")+
   ylab("Win-Loss ratio per 9 inning pitched")
 ```
 
-## 4. What is the relationship between BABIP (should reflect how many hit a pitcher allowed per balls in play) and ERA (Earned Run Average) and how does this relationship change with IP. 
+```{r }
+ERA.breaks <- with(ALSP.WL,seq(from=min(ERA),to=max(ERA),length=51))
+WL9.breaks <- with(ALSP.WL,seq(from=min(WL9),to=max(WL9),length=51))
+ALSP.WL %>%
+  mutate(
+    ERA.bin=cut(ERA,breaks=ERA.breaks,include=TRUE,ordered=TRUE),
+    WL9.bin=cut(WL9,breaks=WL9.breaks,include=TRUE,ordered=TRUE)
+  ) %>% 
+  mutate(
+    ERA=mapvalues(as.numeric(ERA.bin),from=seq_len(50),
+                  to=head(ERA.breaks,-1)+0.5*diff(ERA.breaks)),
+    WL9=mapvalues(as.numeric(WL9.bin),from=seq_len(50),
+                  to=head(WL9.breaks,-1)+0.5*diff(WL9.breaks))
+    ) %>%
+  ddply(~ERA.bin+WL9.bin,summarize,
+        ERA=mean(ERA),WL9=mean(WL9),IP=mean(IP)) %>% 
+  ggplot(aes(x=ERA, y=WL9, z=IP))+
+  geom_tile(aes(fill=IP))+
+  # geom_contour(binwidth = 0.001)+
+  xlab("ERA")+
+  ylab("Win-Loss ratio per 9 inning pitched")
+```
+
+
+
+## 4. What is the relationship between BABIP (should reflect how many hit a pitcher allowed per balls in play) and ERA (Earned Run Average) and how does this relationship change with IP.
 
 ```{r}
 ggplot(data=ALSP.WL, aes(x=ERA, y=BABIP),
