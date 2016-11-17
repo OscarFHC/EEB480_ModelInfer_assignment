@@ -1,0 +1,202 @@
+---
+title: "Assignment 8-1 Maximum Likelihood Lab"
+author: "Feng-Hsun Chang"
+date: "2016 Nov. 15"
+output: 
+  html_document:
+    code_folding: show
+    highlight: haddock
+    number_sections: False
+    theme: yeti
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+---
+
+\newcommand\loglik{\ell}
+
+# Exercise 1
+
+* What does the shape of the likelihood surface tell us about the identifiability of the parameters? What does it say about which aspects of the data are most informative?
+
+This shape indicates that on a certain axis of parameter "a" and "b" combination, the likelihood of observing this given data are similar. Along this combination axis, the data are not informative to tell if the model is good enough to describe (or explain?) the data. 
+
+```{r, echo=FALSE, message=FALSE, warning=FALSE}
+library(plyr)
+library(reshape2)
+library(magrittr)
+library(ggplot2)
+library(grid)
+library(scales)
+library(bbmle)
+library(knitr)
+theme_set(theme_bw())
+```
+
+Here I add a line indicating the carapace length at which the probability of seropositive is 50% given the estimated parameter "a" and "b". 
+
+```{r, message=FALSE, warning=FALSE}
+gt = read.csv("http://kinglab.eeb.lsa.umich.edu/480/data/gophertortoise.csv",
+              comment.char="#",colClasses=c(date="Date",sex="factor",elisa="factor")) %>%
+     arrange(carapace.length,date)
+gt1 = gt %>% 
+  ddply(~id,subset,date==min(date)) %>% 
+  mutate(serostatus=ifelse(elisa=="neg",0,1))
+
+loglik = function (p, serostatus) {
+  sum(log(dbinom(x=serostatus,size=1,prob=p)))
+}
+
+nll = function (a, b, carapace.length, serostatus) {
+  -loglik(p=plogis(a+b*carapace.length),serostatus)
+}
+
+fit = mle2(nll,start=list(a=0,b=0),data=gt1)
+
+params = 
+  expand.grid(
+  a=seq(-9,-4,length=100),
+  b=seq(0.02,0.045,length=100)) %>%
+  ddply(~a+b,mutate,
+        loglik=-nll(a,b,gt1$carapace.length,gt1$serostatus)
+  )  
+
+breaks <- logLik(fit)-qchisq(p=c(0.5,0.8,0.9,0.95,0.99,0.999,0.9999),df=2)/2
+
+ggplot(data=params, aes(x=a,y=b,z=loglik))+
+  stat_contour(aes(color=..level..),breaks=breaks)+
+  geom_point(x=coef(fit)["a"],y=coef(fit)["b"],shape=3)+
+  labs(color=expression(log(L)))+
+  geom_abline(slope=(coef(fit)["b"]/coef(fit)["a"]), intercept=0, col="red", size=1)+
+  theme_bw()+
+  theme(#panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),
+        strip.background = element_blank(),
+        panel.border=element_rect(color="black"),
+        legend.key = element_blank())
+```
+
+We see that along this axis, the data is rather not informative.  
+I now try another model to describe the data with another model that intends to describe how much the probability of seropositive would change when an individual grows larger (or is smaller) than a certain carapace length. This carapace length is the length where the probability of seropositive is 50% given the estimated parameter "a (`r round(coef(fit)["a"], 4)`)" and "b (`r round(coef(fit)["b"],4)`)" in the previous model. So the odds ration function becomes the following. 
+
+$$\mathrm{logit}(p_i) = p0 + p1(L_i-`r round(-(coef(fit)["a"]/coef(fit)["b"]), 3)`)$$
+
+```{r}
+L50 = -(coef(fit)["a"]/coef(fit)["b"])
+
+loglik = function (p, serostatus) {
+  sum(log(dbinom(x=serostatus,size=1,prob=p)))
+}
+
+nll.1 = function (p0, p1, carapace.length, serostatus) {
+  -loglik(p=plogis(p0+p1*(carapace.length-L50)), serostatus)
+}
+
+fit.1 = mle2(nll.1, start=list(p0=0,p1=0),data=gt1)
+
+params.1 = 
+  expand.grid(
+  p0=seq(coef(fit.1)["p0"]-1.5, coef(fit.1)["p0"]+1.5, length=100),
+  p1=seq(coef(fit.1)["p1"]-0.15, coef(fit.1)["p1"]+0.15, length=100)) %>%
+  ddply(~p0+p1, mutate,
+        loglik=-nll.1(p0, p1, gt1$carapace.length, gt1$serostatus)
+  )  
+
+breaks.1 <- logLik(fit.1)-qchisq(p=c(0.5,0.8,0.9,0.95,0.99,0.999,0.9999),df=2)/2
+
+ggplot(data=params.1, aes(x=p0, y=p1, z=loglik))+
+  geom_contour(aes(color=..level..), breaks=breaks.1)+
+  geom_point(x=coef(fit.1)["p0"], y=coef(fit.1)["p1"], shape=3)+
+  labs(color=expression(log(L)))+
+  theme_bw()+
+  theme(#panel.grid.major=element_blank(),
+        panel.grid.minor=element_blank(),
+        strip.background = element_blank(),
+        panel.border=element_rect(color="black"),
+        legend.key = element_blank())
+```
+
+We see that the likelihood surface is different from the previous one. In this model, the two parameters looks more informative than the previous two ("a" and "b") as the surface becomes more rounded. This indicates that the changes in either p0 and p1 parameters would lead to large decrease in likelihood. This model is also easier to interpret. The "p0" parameter means the probability of seropositive when the carapace is at `r round(-(coef(fit)["a"]/coef(fit)["b"]), 3)`. The "p1" parameter means the rate of increase when an individual grow larger than `r round(-(coef(fit)["a"]/coef(fit)["b"]), 3)` in exponential scale. For example, with 1 mm increase in carapace length, the probability of seropositive would increase `r round(exp(coef(fit.1)["p1"]),3)`%. 
+
+# Exercise 2
+
+* Use `mle2` to fit the survival curve, assuming a constant force of infection and that $L \propto a$. Estimate the force of infection.  What are its units? Use confidence intervals (CI) to quantify the uncertainty in your estimate. Make a plot that overlays the model predictions on the data. Plot the likelihood curve. Indicate the MLE and CI for different levels on your plot.
+
+Here I'm using the following exponential function to model the decline of seronegative probability. The left panel is the CDF of exponential function and the right panel is the PDF of the exponential function. 
+
+```{r}
+op = par(mfrow=c(1,2))
+curve(pexp(x, rate=0.006),from=0,to=350, ylab="cumulative probability", main="CDF of exponential distribution")
+curve(dexp(x, rate=0.006),from=0,to=350, ylab="probability", main="PDF of exponential distribution")
+par(op)
+```
+
+Here I found that I can either use the CDF to model the probability of seropositive (hereafter CDF modeling) or use the PDF to model the probability of seronegative (hereafter PDF modleing). I think using CDF does not make intuitive senseas it is the cumulative probability of seropositive from length 0 to the length in interest. However, I still compute the estimate and maximmum likelihood of the two models. 
+
+```{r, warning=FALSE}
+loglik = function (p, serostatus) {
+  sum(log(dbinom(x=serostatus,size=1,prob=p)))
+}
+
+nll.2cdf = function (lam, carapace.length, serostatus) { # the CDF modeling
+  -loglik(p=pexp(carapace.length, rate=lam), serostatus)
+}
+nll.2pdf = function (lam, carapace.length, serostatus) { # the PDF modeling
+  -loglik(p=1-dexp(carapace.length, rate=lam), serostatus)
+}
+
+fit.2.cdf = mle2(nll.2cdf, start=list(lam=0.01),data=gt1)
+fit.2.pdf = mle2(nll.2pdf, start=list(lam=0.01),data=gt1)
+
+coef(fit.2.cdf)
+coef(fit.2.pdf)
+```
+
+* Note that I mute the warning here as I know some negative $\lambda$ would produce probabilities that would produce NaN when being used to calculate likelihood.
+
+The two $\lambda$ estimates are very similar. I then inspect the confidence intervals of the two estimates of $\lambda$.
+
+```{r, message=FALSE, echo=FALSE}
+pfit.2.cdf = profile(fit.2.cdf)
+pfit.2.pdf = profile(fit.2.pdf)
+op = par(mfrow=c(1,2))
+plot(pfit.2.cdf, main="lambda from CDF modeling")
+plot(pfit.2.pdf, main="lambda from PDF modeling")
+par(op)
+
+CI95.cdf=confint(fit.2.cdf)
+CI95.pdf=confint(fit.2.pdf)
+CI95=rbind(CI95.cdf, CI95.pdf)
+  rownames(CI95)=c("CDF modeling", "PDF modeling")
+kable(CI95)
+```
+
+I then overlay the model predictions on the data.
+
+```{r}
+gt1 = 
+  gt1 %>% mutate(
+    fitted.cdf=with(as.list(coef(fit.2.cdf)),pexp(carapace.length, rate=lam)),
+    fitted.pdf=with(as.list(coef(fit.2.pdf)),(1-dexp(carapace.length, rate=lam))))
+
+gt1 %>%
+  ggplot(aes(x=carapace.length))+
+  geom_point(aes(y=serostatus, color=elisa))+
+  geom_line(aes(y=fitted.cdf, color="cdf"), size=1)+
+  geom_line(aes(y=fitted.pdf, color="pdf"), size=1)+
+  scale_color_manual(name="", 
+                     values=c(cdf="red", pdf="blue", neg="grey", pos="black"),
+                     labels=c(cdf="fitted values \n from CDF modeling", pdf="fitted values \n from PDF modeling",      neg="seronegative", negpos="seropositive"))
+```
+
+
+Although the two 
+
+
+params.2.cdf = 
+  expand.grid(
+  lam=seq(coef(fit.2.cdf)["lam"]-1.5, coef(fit.2.cdf)["lam"]+1.5, length=100)) %>%
+  ddply(~lam, mutate,
+        loglik=-nll.2cdf(lam, gt1$carapace.length, gt1$serostatus)
+  )  
