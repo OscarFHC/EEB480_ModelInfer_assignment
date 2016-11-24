@@ -1,0 +1,601 @@
+---
+title: "hw6_lm_FHChang"
+author: "Feng-Hsun Chang"
+date: "2016.Oct.17"
+output:
+  html_document:
+    code_folding: show
+    highlight: haddock
+    number_sections: False
+    theme: yeti
+    toc: true
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+---
+
+First I read in data from my own GitHub repository
+
+```{r, message=FALSE}
+library(RCurl)
+library(plyr)
+library(dplyr)
+library(tidyr)
+library(ggplot2)
+library(grid)
+library(gridExtra)
+library(lmtest)
+library(scales)
+
+dat1_raw=read.csv(text=getURL("https://raw.githubusercontent.com/OscarFHC/EEB480_ModelInfer_assignment/master/Mod_Infer_hw6/Parus_major_Wytham_Wood.csv"), sep=",", header=T,comment.char="#")
+dat2_raw=read.csv(text=getURL("https://raw.githubusercontent.com/OscarFHC/EEB480_ModelInfer_assignment/master/Mod_Infer_hw6/Thrips_imaginis_Davidson1948.csv"), sep=",", header=T,comment.char="#")
+parus = dat1_raw %>%
+  rename(yr=Sample.Date, pop.nat=Population)
+thrip = dat2_raw %>%
+  mutate(yr=Sample.Date%/%1,
+         month=round(100*(Sample.Date%%1)),
+         time=yr+month/12,
+         pop.nat=Population,
+         Population=NULL,
+         Sample.Date=NULL)
+```
+
+
+# Exercise 1
+
+Here I plot the time series of each data set in untransformed population size (pop.nat), squared root-transformed population size (pop.sqrt) and log-transformed population size (pop.log).
+
+```{r}
+parus.nat = ggplot(data=parus, aes(x=yr, y=pop.nat))+
+              geom_line()+
+              scale_y_continuous()+
+              labs(x="year", y="arithmetic \n population size")
+parus.sqrt = ggplot(data=parus, aes(x=yr, y=pop.nat))+
+              geom_line()+
+              scale_y_continuous(trans="sqrt")+
+              labs(x="year", y="squared root of \n population size")
+parus.log = ggplot(data=parus, aes(x=yr, y=pop.nat))+
+              geom_line()+
+              scale_y_continuous(trans="log")+
+              labs(x="year", y="log population size")
+grid.arrange(parus.nat, parus.sqrt, parus.log, ncol=1)
+
+thrip.nat = ggplot(data=thrip, aes(x=time, y=pop.nat))+
+              geom_line()+
+              scale_y_continuous()+
+              labs(x="year", y="arithmetic \n population size")
+thrip.sqrt = ggplot(data=thrip, aes(x=time, y=pop.nat))+
+              geom_line()+
+              scale_y_continuous(trans="sqrt")+
+              labs(x="year", y="squared root of \n population size")
+thrip.log = ggplot(data=thrip, aes(x=time, y=pop.nat))+
+              geom_line()+
+              scale_y_continuous(trans="log")+
+              labs(x="year", y="log population size")
+grid.arrange(thrip.nat, thrip.sqrt, thrip.log, ncol=1)
+```
+
+Here I found that, among the three transformations of the population size, the dynamics of parus population (the first figure) are more similar than those of thrip population. This is due to the fact the range of the data are more widely distributed in thrip population. Therefore, the effects of transformation on thrip data are more obvious. From the table below, we see that thrips data expands almost 3 orders of magnitude, while the parus data only expands less than half an order of magnitude.
+
+```{r}
+list(parus=parus,thrips=thrip) %>%
+  ldply(.id='dataset') %>%
+  ddply(~dataset,summarize,range=diff(range(log10(pop.nat))))
+```
+
+# Exercise 2
+
+```{r, echo=FALSE, include=FALSE}
+parus.ex2 = parus  %>%
+  mutate(pop.log=log(pop.nat)) %>%
+  mutate(ratio=c(log(parus[,"pop.nat"][2:nrow(parus)]/parus[,"pop.nat"][1:(nrow(parus)-1)]), "NA")) %>%
+  filter(ratio!="NA") %>%
+  mutate(ratio=as.numeric(ratio))
+```
+
+To plot the relationships between $\log\frac{N_t}{N_{t-1}}$ and $N_{t-1}$ as well as $\log\frac{N_t}{N_{t-1}}$ and $\log(N_{t-1})$, I first create a new variable, called "ratio" to store $\log\frac{N_t}{N_{t-1}}$. However, there are only `r nrow(parus.ex2)` population size to calculate `r nrow(parus.ex2)-1` ratio, so the last entry of "ratio" will be "NA". I therefore remove the last row from the data set.  
+Here I show the relationships between $log\frac{N_t}{N_{t-1}}$ and $log(N_{t-1})$ (upper panel; Ricker model in equation 5) as well as $log\frac{N_t}{N_{t-1}}$ and $N_{t-1}$ (lower panel; Gompertz model in equation 6) in the parus data set.
+
+```{r}
+parus.ex2 = parus  %>%
+  mutate(pop.log=log(pop.nat)) %>%
+  mutate(ratio=c(log(parus[,"pop.nat"][2:nrow(parus)]/parus[,"pop.nat"][1:(nrow(parus)-1)]), "NA")) %>%
+  filter(ratio!="NA") %>%
+  mutate(ratio=as.numeric(ratio))
+
+p1= ggplot(data=parus.ex2, aes(x=pop.nat, y=ratio))+
+    geom_point()+
+    labs(x="arithmetic population size", y="")+
+    ylim(-0.65, 0.65)+
+    theme_bw()+
+    theme(panel.grid.major=element_blank(),
+          panel.grid.minor=element_blank(),
+          strip.background = element_blank(),
+          panel.border=element_rect(color="black"))
+p2= ggplot(data=parus.ex2, aes(x=pop.log, y=ratio))+
+    geom_point()+
+    labs(x="log population size", y="")+
+    ylim(-0.65, 0.65)+
+    theme_bw()+
+    theme(panel.grid.major=element_blank(),
+          panel.grid.minor=element_blank(),
+          strip.background = element_blank(),
+          panel.border=element_rect(color="black"))
+
+grid.arrange(p1, p2, ncol=1, left=textGrob("log population growth rate", rot=90, vjust=2))
+```
+
+The parus data set returns me similar patterns and both of them show a negative relationship, which possibly indicates a existence of density dependency.  
+
+Here I show the relationships between $log\frac{N_t}{N_{t-1}}$ and $log(N_{t-1})$ (upper panel; Ricker model in equation 5) as well as $log\frac{N_t}{N_{t-1}}$ and $N_{t-1}$ (lower panel; Gompertz model in equation 6) in the thrips data set.
+
+```{r}
+thrip.ex2 = thrip  %>%
+  mutate(pop.log=log(pop.nat)) %>%
+  mutate(ratio=c(log(thrip[,"pop.nat"][2:nrow(thrip)]/thrip[,"pop.nat"][1:(nrow(thrip)-1)]), "NA")) %>%
+  filter(ratio!="NA") %>%
+  mutate(ratio=as.numeric(ratio))
+
+p1= ggplot(data=thrip.ex2, aes(x=pop.nat, y=ratio))+
+    geom_point()+
+    labs(x="arithmetic population size", y="")+
+    ylim(-3.2, 3.2)+
+    theme_bw()+
+    theme(panel.grid.major=element_blank(),
+          panel.grid.minor=element_blank(),
+          strip.background = element_blank(),
+          panel.border=element_rect(color="black"))
+p2= ggplot(data=thrip.ex2, aes(x=pop.log, y=ratio))+
+    geom_point()+
+    labs(x="log population size", y="")+
+    ylim(-3.2, 3.2)+
+    theme_bw()+
+    theme(panel.grid.major=element_blank(),
+          panel.grid.minor=element_blank(),
+          strip.background = element_blank(),
+          panel.border=element_rect(color="black"))
+
+grid.arrange(p1, p2, ncol=1, left=textGrob("log population growth rate", rot=90, vjust=2))
+```
+
+The thrip data only shows a slightly negative trend when the population size is log-transformed. Although there is also a negative relationship between per capita growth rate versus population size, it could be dominated by those measurements of large population size. This implies it might not be proper to fit the Ricker model to the thrip data as the error of the population size of thrip is probably not normally distributed.
+
+# Exercise 3 and 4
+
+To fit Eqs. 5 and 6 to the data, I fit the linear model to the plots in the previous exercise. I used the data frame that is being used in previous exercise and fit a linear model for $log\frac{N_t}{N_{t-1}}$ and $N_{t-1}$ (Gompertz model in equation 6) as well as $log\frac{N_t}{N_{t-1}}$ and $log(N_{t-1})$ (Ricker model in equation 5). In addition, I calculate and store the r and K estimated from both models for comparison.  
+
+```{r}
+parus.lm.ricker=lm(ratio~pop.nat, data=parus.ex2)
+parus.r.ricker=parus.lm.ricker$coefficients[1]
+parus.K.ricker=-(parus.lm.ricker$coefficients[1]/parus.lm.ricker$coefficients[2])
+
+parus.lm.gomp=lm(ratio~pop.log, data=parus.ex2)
+parus.r.gomp=-log(-parus.lm.gomp$coefficients[2])
+parus.K.gomp=exp(parus.lm.gomp$coefficients[1]/-(parus.lm.gomp$coefficients[2]))
+```
+
+In the Parus data set, the carrying capacity of parus is estimated to be `r parus.K.ricker` in the Ricker model and `r parus.K.gomp` in the Gompertz model. The two estimates of carrying capacity are pretty similar. However, the two estimates of the intrinsic growth rate (`r parus.r.ricker` in the Ricker model and `r parus.r.gomp` in the Gompertz model) in two model differ more than one order of magnitude. This is intriguing because the patters of the two relationships are so similar.  
+
+This is because the $r$ in two models are describing the population dynamics in a different ways. For example, given the same $r$ (say 0.1) and same $K$ (say 195), when $N_{t-1}$ is very small (say 0.0001), $log\frac{N_t} {N_{t-1}}$ in the Ricker model is `r 0.1*(1-0.0001/195)` but it is `r exp(-0.1)*(log(195)-log(0.0001))` in the Gompertz model. However, there should only be one value of $log\frac{N_t} {N_{t-1}}$, since it is the same population under the same condition. The meaning of at least $r$ in the two models are different.
+
+```{r}
+thrip.lm.ricker=lm(ratio~pop.nat, data=thrip.ex2)
+thrip.r.ricker=thrip.lm.ricker$coefficients[1]
+thrip.K.ricker=-(thrip.lm.ricker$coefficients[1]/thrip.lm.ricker$coefficients[2])
+
+thrip.lm.gomp=lm(ratio~pop.log, data=thrip.ex2)
+thrip.r.gomp=-log(-thrip.lm.gomp$coefficients[2])
+thrip.K.gomp=exp(thrip.lm.gomp$coefficients[1]/-(thrip.lm.gomp$coefficients[2]))
+```
+
+In the Thrips data set, both the intrinsic growth rate (`r thrip.r.ricker` in the Ricker model vs `r thrip.r.gomp` in the Gompertz model) and carrying capacity (`r thrip.K.ricker` in the Ricker model vs `r thrip.K.gomp` in the Gompertz model) estimated by both model are so different from each other. Although the Gompertz model performs slightly better than the Ricker model and returns a statistically significant slope, both model have poor explanation to the variation of per capita growth rate. Judging from only this analysis, one could conclude that the density dependency does not exist or at least not strong enough to be detected. However, other factors could be influencing the density dependency, like seasonality, which I would be able to see it in the following exercises.
+
+# Exercise 5
+
+Here I first use dots to indicate the observed growth rate and blue line to indicate the fitted growth rate versus population size in arithmetic scale (upper panel; Ricker model) and in log scale (lower panel; Gompertz model) for Parus data set. This is basically plot the fitted line onto the plot in exercise 2.
+
+```{r}
+parus.ex2 = parus.ex2  %>%
+  mutate(rick.fit=predict(parus.lm.ricker), gomp.fit=predict(parus.lm.gomp))
+
+p1= ggplot(data=parus.ex2)+
+    geom_point(aes(x=pop.nat, y=ratio), col="black")+
+    geom_line(aes(x=pop.nat, y=rick.fit), col="blue")+
+    labs(x="arithmatic population size", y="")+
+    ylim(-0.65, 0.65)+
+    theme_bw()+
+    theme(panel.grid.major=element_blank(),
+          panel.grid.minor=element_blank(),
+          strip.background = element_blank(),
+          panel.border=element_rect(color="black"))
+p2= ggplot(data=parus.ex2, aes(x=pop.nat, y=ratio))+
+    geom_point(aes(x=pop.log, y=ratio), col="black")+
+    geom_line(aes(x=pop.log, y=gomp.fit), col="blue")+
+    labs(x="log population size", y="")+
+    ylim(-0.65, 0.65)+
+    theme_bw()+
+    theme(panel.grid.major=element_blank(),
+          panel.grid.minor=element_blank(),
+          strip.background = element_blank(),
+          panel.border=element_rect(color="black"))
+
+grid.arrange(p1, p2, ncol=1, left=textGrob("log population growth rate", rot=90, vjust=2))
+```
+
+In the Parus data set, the two density dependency models fit fairly well. More than 40% of the variance of $log\frac{N_t} {N_{t-1}}$ is explained by the model (`r round(summary(parus.lm.ricker)$adj.r.square, 2)` in the Ricker model and `r round(summary(parus.lm.gomp)$adj.r.square, 2)` in the Gomprtz model.).  
+Next, I do the same thing with the thrip data set.
+
+```{r}
+thrip.ex2 = thrip.ex2  %>%
+  mutate(rick.fit=predict(thrip.lm.ricker), gomp.fit=predict(thrip.lm.gomp))
+
+p1= ggplot(data=thrip.ex2)+
+    geom_point(aes(x=pop.nat, y=ratio), col="black")+
+    geom_line(aes(x=pop.nat, y=rick.fit), col="blue")+
+    labs(x="arithmatic population size", y="")+
+    ylim(-3.2, 3.2)+
+    theme_bw()+
+    theme(panel.grid.major=element_blank(),
+          panel.grid.minor=element_blank(),
+          strip.background = element_blank(),
+          panel.border=element_rect(color="black"))
+p2= ggplot(data=thrip.ex2, aes(x=pop.nat, y=ratio))+
+    geom_point(aes(x=pop.log, y=ratio), col="black")+
+    geom_line(aes(x=pop.log, y=gomp.fit), col="blue")+
+    labs(x="log population size", y="")+
+    ylim(-3.2, 3.2)+
+    theme_bw()+
+    theme(panel.grid.major=element_blank(),
+          panel.grid.minor=element_blank(),
+          strip.background = element_blank(),
+          panel.border=element_rect(color="black"))
+
+grid.arrange(p1, p2, ncol=1, left=textGrob("log population growth rate", rot=90, vjust=2))
+```
+
+In the Thrips data set, the two density dependency models do not fit well. Less than 20% of the variance of $log\frac{N_t} {N_{t-1}}$ is explained by the model (`r round(summary(thrip.lm.ricker)$adj.r.square, 2)` in the Ricker model and `r round(summary(thrip.lm.gomp)$adj.r.square, 2)` in the Gompertz model.)
+
+> But does one appear to fit better, according to the plots? Can you plot both models with the data on a single pair of axes?
+
+# Exercise 6
+
+Here I use $t$-test to test whether the slope estimation is significantly different from 0 and use $F$-test to test whether the model with explanatory variable (i.e. with intercept and slope in this case) can explain significantly more variance than the one without explanatory variable (i.e. with only intercept in this case).
+
+```{r}
+summary(parus.lm.ricker)
+anova(parus.lm.ricker)
+```
+
+The significance of the population size in the $t-test$ indicates the influences of population size on $log\frac{N_t} {N_{t-1}}$ is significantly different from 0 (the purpose of $t-test$). The significance in the $F-test$ indicates the model with population size as explanatory variable explains greater amount of variance of $log\frac{N_t} {N_{t-1}}$ than the model without population size as explanatory variable.
+
+In terms of the amount of variance being explained, we can see that the $t-test$ performed on the slope estimation is identical to the $F-test$ performed on the model. This is because the influences of a explanatory variable in a model is the amount of variance explained by this explanatory variable. In this case, after include population size as explanatory variable, sum of squared error is being reduced from $`r var(parus.ex2$ratio)*(nrow(parus.ex2)-1)`$ (this is the total sum of square) to $`r anova(parus.lm.ricker)[2,2]`$. The amount of this reduction is the $R^2$ estimated in the linear model (`r summary(parus.lm.ricker)$r.squared`).  
+
+In terms of the significance of the influence of population size, p value from the $t-test$ performed on the slope estimation is identical to the $F-test$ performed on the model. The probability for the model without population size as explanatory variable to reduce the same amount of sum of square error is $`r summary(parus.lm.ricker)$coefficients[2,4]`$ (i.e. the results from $t-test$). This probability is identical to the p value in the $F-test$ ($`r signif(anova(parus.lm.ricker)[1,5],2)`$).
+
+# Exercise 7
+
+Here I first calculate the 95%, 90%, 80%, 60% confidence intervals of the two parameters in the Ricker model and overlay these confidence intervals onto the fitted linear model (blue line). The black dots represent the original data points.
+
+```{r}
+confint(parus.lm.ricker, level=0.95)
+confint(parus.lm.ricker, level=0.90)
+confint(parus.lm.ricker, level=0.80)
+confint(parus.lm.ricker, level=0.60)
+
+ggplot(data=parus.ex2,aes(x=pop.nat, y=ratio))+
+    geom_point(col="black")+
+    geom_line(aes(x=pop.nat, y=rick.fit), col="blue")+
+    stat_smooth(method="lm", level=0.95)+
+    stat_smooth(method="lm", level=0.90)+
+    stat_smooth(method="lm", level=0.80)+
+    stat_smooth(method="lm", level=0.60)+
+    labs(x="arithmatic population size", y="")+
+    ylim(-1, 0.65)+
+    theme_bw()+
+    theme(panel.grid.major=element_blank(),
+          panel.grid.minor=element_blank(),
+          strip.background = element_blank(),
+          panel.border=element_rect(color="black"))
+```
+
+The shaded area (standard error of the linear model) gradually increase with the level of confidence interval specified. This is implies the increase of making Type I error when increasing the specified confidence interval.
+
+# Exercise 8
+
+To calculate the standard error of carrying capacity by the delta method, I first use `lm()` function to estimate the $\beta$ matrix, which I name it "B". Then I calculate the variance-covariance matrix of this $\beta$ matrix. I also write a transformation function that transforms the $\beta_i$ I derive from the linear model to the r and K in the Ricker model. Finally, according to the "delta method", the variance (or standard error) of the transformed parameters could be approximated by $$JVar[\beta]J^T$$, where $J$ is the Jacobian matrix of the $\beta$ matrix evaluated and $Var[\beta]$ is the variance-covariance of the $\beta$ matrix.
+
+```{r}
+B = summary(parus.lm.ricker)$coefficients[,1]
+vcovB = vcov(parus.lm.ricker) # variance-covariance matrix of the linear model (Ricker model)
+
+fun2 = function(M){ # transformation function from coefficients to theta (carrying capacity in this case)
+  theta2 = -(M[1]/M[2])
+}
+
+#install.packages("numDeriv")
+# Here I installed a package to calculate the Jacobian matrix evaluated at the beta = beta hat
+library(numDeriv)
+
+K.se = sqrt(jacobian(fun2, B) %*% vcovB %*% t(jacobian(fun2, B)))
+K.se
+```
+
+> Come on, Oscar, a little calculus won't kill you!
+
+This K.se is the standard error of the K parameter in the Ricker model given the estimated parameters in the linear model.   
+I also found the following package that allows me to calculate the standard error of a parameter that is being transformed from the coefficients estimated in a model.
+
+```{r}
+library(msm)
+deltamethod(~ -(x1/x2), coef(parus.lm.ricker), vcov(parus.lm.ricker))
+```
+
+The two values are the same, so this standard error should be correct.
+
+Here I go on to calculate the standard error of the carrying capacity in the Gompertz model.
+
+```{r}
+B = summary(parus.lm.gomp)$coefficients[,1]
+vcovB = vcov(parus.lm.gomp) # variance-covariance matrix of the linear model (Ricker model)
+
+fun2 = function(M){ # transformation function from coefficients to theta (carrying capacity in this case)
+  theta2 = exp(M[1]/-M[2])
+}
+
+#install.packages("numDeriv")
+# Here I installed a package to calculate the Jacobian matrix evaluated at the beta = beta hat
+library(numDeriv)
+
+K.se = sqrt(jacobian(fun2, B) %*% vcovB %*% t(jacobian(fun2, B)))
+K.se
+
+deltamethod(~ exp(x1/-x2), coef(parus.lm.gomp), vcov(parus.lm.gomp))
+```
+
+# Exercise 9
+
+Here, I compare the $R^2$ and adjusted $R^2$ in both the Ricker and Gompertz models to judge which one explain the model better.
+Specifically, I first calculate the total sum of square (SST) and residual sum of square (SSR) for both models. $1-SSR/SST$ is the $R^2$, which is also the amount of variance being explained by the explanatory variable. After corrected SST and SSR with their corresponding degree of freedom, the adjusted $R^2$ can be calculated. Therefore adjusted $R^2$ takes number of explanatory variable into account as increasing number of explanatory variable will decrease the degree of freedom of SSR, so decrease the adjusted $R^2$.
+
+```{r}
+parus.lm.ricker=lm(ratio~pop.nat, data=parus.ex2)
+#summary(parus.lm.ricker)
+SST.r = var(parus.ex2[,"ratio"])*(nrow(parus.ex2)-1)
+SSR.r = sum(residuals(parus.lm.ricker)^2)
+R2.r = 1-(SSR.r/SST.r)
+R2.r.adj = 1-(SSR.r/(nrow(parus.ex2)-2))/(SST.r/(nrow(parus.ex2)-1))
+```
+
+The $R^2$ of the Ricker model is `r R2.r` and the adjusted $R^2$ is `r R2.r.adj`.  
+Following the same fashion, I calculated the $R^2$ and adjusted $R^2$ for the Gompertz model.
+
+```{r}
+parus.lm.gomp=lm(ratio~pop.log, data=parus.ex2)
+#summary(parus.lm.gomp)
+SST.g = var(parus.ex2[,"ratio"])*(nrow(parus.ex2)-1)
+SSR.g = sum(residuals(parus.lm.gomp)^2)
+R2.g = 1-(SSR.g/SST.g)
+R2.g.adj = 1-(SSR.g/(nrow(parus.ex2)-2))/(SST.g/(nrow(parus.ex2)-1))
+```
+
+The $R^2$ of the Gompertz model is `r R2.g` and the adjusted $R^2$ is `r R2.g.adj`.
+
+Since the two models are using the same data and have same number of explanatory variables. The difference between $R^2$ and adjusted $R^2$ should mean the same thing. However, since the adjusted $R^2$ is the unbiased estimate, I think we should use adjust $R^2$ to judge which model fit the data better. From the difference between adjusted $R^2$, we can see that the Gompertz model explain about `r round(R2.g.adj - R2.r.adj, 4)*100` % more variance than the Ricker model.
+
+# Exercise 10
+
+## Ex 10.1 Gompertz model and the Ricker model for Thrips data set.
+
+Here, I use the Thrips data set to do the same analysis as those have been done in exercise 9.
+
+```{r}
+thrip.lm.ricker=lm(ratio~pop.nat, data=thrip.ex2)
+SST.r = var(thrip.ex2[,"ratio"])*(nrow(thrip.ex2)-1)
+SSR.r = sum(residuals(thrip.lm.ricker)^2)
+R2.r = 1-(SSR.r/SST.r)
+R2.r.adj = 1-(SSR.r/(nrow(thrip.ex2)-2))/(SST.r/(nrow(thrip.ex2)-1))
+```
+
+The $R^2$ of the Ricker model is `r R2.r` and the adjusted $R^2$ is `r R2.r.adj`.  
+
+```{r}
+thrip.lm.gomp=lm(ratio~pop.log, data=thrip.ex2)
+SST.g = var(thrip.ex2[,"ratio"])*(nrow(thrip.ex2)-1)
+SSR.g = sum(residuals(thrip.lm.gomp)^2)
+R2.g = 1-(SSR.g/SST.g)
+R2.g.adj = 1-(SSR.g/(nrow(thrip.ex2)-2))/(SST.g/(nrow(thrip.ex2)-1))
+```
+
+The $R^2$ of the Gompertz model is `r R2.g` and the adjusted $R^2$ is `r R2.g.adj`.
+
+Similarly, from the difference between adjusted $R^2$, we can see that the Gompertz model explain about `r round(R2.g.adj - R2.r.adj, 4)*100` % more variance than the Ricker model.
+
+## Ex 10.2 Adjust $R^2$
+
+Exploring the adjust $R^2$ value with different combination of independent variables in the Gompertz model.
+
+To do so, I first inspect if there is any temporal structure in the Thrips data set. I use `acf()` function to inspect the temporal auto correlation.
+
+```{r, acf}
+acf(thrip.ex2$pop.log, main="autocorrelation plot of population density")
+acf(thrip.ex2$ratio, main="autocorrelation plot of growth rate")
+```
+
+From the plot of autocorrelation function, we see that there is a 4-month seasonality pattern in both population density (pop.log) and the growth rate (ratio).
+
+I therefore fit the linear model with interaction terms of population size and each month. By doing so, I can inspect whether the influences of population size on $log\frac{N_t} {N_{t-1}}$ are different in different month.
+
+```{r}
+thrip.ex2[,"month"]=as.factor(thrip.ex2[,"month"])
+thrip.lm.gomp=lm(ratio~pop.log, data=thrip.ex2)
+summary(thrip.lm.gomp)
+thrip.season.gomp = lm(ratio~pop.log + pop.log:month, data=thrip.ex2)
+summary(thrip.season.gomp)
+```
+
+In this improved model, I found that the interaction term of month 4, 5, 8, 9, 10, 11 are significantly different from the January term. This indicates that the influences of population size on $log\frac{N_t} {N_{t-1}}$ in these months are different from the one in month 1.
+
+Now I compare the model considering seasonality with the one with no seasonality.
+
+```{r}
+anova(thrip.lm.gomp, thrip.season.gomp)
+```
+
+The one with seasonality largely improves the explanation power as it decrease the residual sum of square from `r anova(thrip.lm.gomp, thrip.season.gomp)[1,2]` to `r anova(thrip.lm.gomp, thrip.season.gomp)[2,2]` (total sum of square is `r sum(anova(thrip.season.gomp)[,2])`). However, it still does not beat your 0.74 in adjust $R^2$
+
+In the following I try to fit a linear mix effects model to the data to see if there is any further improvement. However, because the mixed effects model does not use ordinary least square method, so I can not extract the $R^2$ from the mixed effect model. In stead, I calculate the residual sum of square and the AIC of the two models for comparison.
+
+```{r}
+library(nlme)
+mod.lme = lme(ratio~pop.log,data=thrip.ex2,random=~1|month)
+#summary(mod_lme)
+sum((thrip.ex2[,"ratio"] - predict(mod.lme))^2)
+sum((thrip.ex2[,"ratio"] - predict(thrip.season.gomp))^2)
+
+AIC(mod.lme)
+AIC(thrip.season.gomp)
+```
+
+The mixed effects model further reduce the residual sum of square by 2 unit. However, from the AIC value, the mixed effects model does not perform better than the simple linear model with interaction terms (AIC of the mixed effects model is `r AIC(mod.lme)` and AIC of the simple linear model is `r AIC(thrip.season.gomp)`).
+
+?? What is the model that produce your 0.74 adjust $R^2$?
+
+> Try including seasonality in the intercept as well as the slope of the Gompertz.
+
+```{r}
+thrip.season.gomp1 = lm(ratio~1:month + pop.log + pop.log:month, data=thrip.ex2)
+summary(thrip.season.gomp1)
+
+```
+
+# Exercise 11
+
+## 11.a
+
+I first use the default plot function in R to inspect the goodness-of-fit of the Gompertz model and perform the Breusch-Pagan test to inspect the structure of residuals (homoscedasticity).  
+
+```{r, heteroskedasticity}
+plot(parus.lm.gomp)
+bptest(parus.lm.gomp)
+```
+
+From the first (residuals on the y axis against fitted values on the x) and the second (normal qqnorm plot) diagnostic plots, we see not clear structure of the residuals except couple points (23, 21, 16). The Breusch-Pagan test also show nonsignificant results, which indicates that there is no statistically significant structure in the residuals. However, the scale-location plot might suggest that point 23, 21, and 16 would have slightly higher residuals. 
+
+## 11.b
+
+Here I use Shapiro-Wilk test and QQ plot to inspect the normality of residuals.
+
+```{r, normality of residuals}
+shapiro.test(residuals(parus.lm.gomp))
+qqnorm(residuals(parus.lm.gomp))
+qqline(residuals(parus.lm.gomp), col="red")
+```
+
+The Shapiro-Wilk test also shows a nonsignificant result. This means the residuals are normally distributed. From the histogram of the residuals, we can see that the distribution really looks like a normal distribution.
+
+## 11.c
+
+From the fourth diagnostic plot (Residuals vs Leverage plot), point 23, 21 and 16 are the ones that have larger influences, but the leverage of the three are rather small. The influences of the three could be fairly small.
+
+> How would you check?
+
+## 11.d
+
+Here, I use Durbin-Watson to test if there is correlation between residuals.
+
+```{r, temporal autocorrelation}
+dwtest(parus.lm.gomp)
+```
+
+The residuals of the Gompertz model does not show temporal auto correlation.  
+
+## 11.e
+
+Here I calculate the standard error of the r and K parameter in the Gompertz model.
+
+```{r, biological validation}
+summary(parus.lm.gomp)
+
+library(msm)
+parus.r.se = deltamethod(~ -log(-x2), coef(parus.lm.gomp), vcov(parus.lm.gomp))
+parus.K.se = deltamethod(~ exp(x1/-(x2)), coef(parus.lm.gomp), vcov(parus.lm.gomp))
+```
+
+In the Gompertz model, the carrying capacity is estimated to be `r round(parus.K.gomp,3)` with standard error about `r round(parus.K.se,3)`. This number is biologically reasonable. However, the intrinsic growth rate is the Gompertz model is estimated to be `r round(parus.r.gomp, 3)` with standard error about `r round(parus.r.se, 3)`. The standard error of intrinsic growth rate is large so that the confidence interval of intrinsic growth rate overlaps 0. This suggests that the intrinsic growth rate estimated in the Gompertz model is not significantly different from 0, which is biologically not feasible.  
+However, the standard error estimated by the delta method would no longer be valid when deviate too much from the estimated point. A profile likelihood profile of this parameter is probably required to judge the confidence interval of these parameter.  
+??Question: You mentioned in your comment that this shows a skewed distribution of $r$. How do you tell thin?
+
+# Exercise 12
+
+Here I use the best model that includes seasonality to do the same analyses as those in exercise 11 with Thrips data set.
+
+## 12.a
+
+```{r, thrip model checking}
+plot(thrip.season.gomp)
+bptest(thrip.season.gomp)
+```
+
+From the 4 diagnostic plots, I see no clear structure of the residuals. The Breusch-Pagan test also suggests that the residual are homoscedasticity. 
+
+## 12.b
+```{r, thrip normality of residuals}
+shapiro.test(residuals(thrip.season.gomp))
+qqnorm(residuals(thrip.season.gomp))
+qqline(residuals(thrip.season.gomp), col="red")
+```
+
+The Shapiro-Wilk test also shows nonsignificant result. This means the residuals are normally distributed. However, from the QQ plot, only point 30, 31, and 39 might be slightly deviated from the theoretical line. 
+
+## 12.c
+
+From the fourth diagnostic plot (Residuals vs Leverage plot), point 78 and 79 are the ones that have large leverage.  
+
+## 12.d
+
+```{r, thrip temporal autocorrelation}
+dwtest(thrip.season.gomp)
+```
+
+The residuals of the Gompertz model shows no temporal autocorrelation structure in residuals. 
+
+## 12.e
+
+```{r, thrip biological validation}
+summary(thrip.season.gomp)
+
+library(msm)
+thrip.r.se = deltamethod(~ -log(-x2), coef(thrip.season.gomp), vcov(thrip.season.gomp))
+thrip.K.se = deltamethod(~ exp(x1/-(x2)), coef(thrip.season.gomp), vcov(thrip.season.gomp))
+```
+
+> the r and K estimated from this model (including seasonality) would be different in different months. How do I interpret this?
+
+In the Gompertz model with seasonality, the carrying capacity is estimated to be `r round(thrip.K.gomp,3)` with standard error about `r round(thrip.K.se,3)`. This number is biologically reasonable. The intrinsic growth rate is the Gompertz model is estimated to be `r round(thrip.r.gomp, 3)` with standard error about `r round(thrip.r.se, 3)`. The standard error of intrinsic growth rate is large so that the confidence interval of intrinsic growth rate overlaps 0. This suggests that the intrinsic growth rate estimated in the Gompertz model is not significantly different from 0, which is biologically not feasible.
+
+> Why not do Ex 12 using your best model?
+
+# Exercise 13
+
+Here I randomly choose half of the data to estimate r and K in the Gompertz model and then use these estimated r and K to predict $log\frac{N_t}{N_{t-1}}$ in the other half of the data.
+
+```{r, thrip cross validation}
+set.seed(543)
+train.id = sample(seq(1: nrow(thrip.ex2)), nrow(thrip.ex2)/2, replace=FALSE)
+train.mod = lm(ratio~pop.log, data=thrip.ex2[train.id,])
+y.pred = predict(train.mod, newdata=thrip.ex2[-train.id,])
+
+plot(thrip.ex2[-train.id,"ratio"]~y.pred, xlab="predicted growth rate", ylab="observed growth rate")
+summary(lm(y.pred~thrip.ex2[-train.id,"ratio"]))
+```
+
+When plotted the observed $log\frac{N_t}{N_{t-1}}$ against the predicted $log\frac{N_t}{N_{t-1}}$, the two are not matching with each other well. Predicted growth rates only explain `r 100*round(summary(lm(y.pred~thrip.ex2[-train.id,"ratio"]))$adj.r.square,4)`% of the variance of observed growth rate. This is not much better than fitting the whole data set (adjust $R^2$ is `r round(summary(thrip.lm.gomp)$adj.r.square, 3)`). I suspect this is due to the fact that this linear model *per se* does not capture the 4-month seasonality.  
+
+> Plot observed vs predicted for both within- and out-of-fit data. Again, it would be more interesting to use your best model here (we know the Gompertz is bad for these data).
+
+# Exercise 14
+
+In the thrip data set, there is a clear 4-month cycle in the population density and growth rate (see the ACF figures in exercise 10.2). I suspect this is the main reason why linear model does not preform well in this data set.
+
+> Oscar, overall very nice indeed. There are a few places where you can polish the results and some points you might still find instructive.  It's OK too if you want to skip the third draft.  
+**Score: 29/30**

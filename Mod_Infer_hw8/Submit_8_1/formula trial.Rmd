@@ -1,0 +1,94 @@
+---
+title: "Untitled"
+author: "Feng-Hsun Chang"
+date: "2016¦~11¤ë19¤é"
+output: html_document
+---
+
+\newcommand\prob[1]{\mathbb{P}\left[{#1}\right]}
+\newcommand{\dd}[1]{\mathrm{d}{#1}}
+
+Here I make the infection hazard a function of carapace length. I first try the hazard function in the Michaelis-Menten form. 
+
+$$\lambda(L) = \frac{r_mL}{K+L}$$,  
+where $r_m$ is the highest probability an individual could be infected, and $K$ describes the carapace length where the individual has half of the $r_m$. 
+
+Accordingly, the CDF the determines the probability of an individual to be seropositive is 
+
+$$\prob{X_i=\text{pos}} = 1 - \exp{\left[-\int_0^L\!\lambda(L)\dd{L}\right]} = 1 - \exp{\left [r_m (L - K*Log(K + L)  \right ]}$$
+
+$\beta$
+
+$\bar{X}$
+
+$S^2 = \frac{1}{(n-1)^2} \sum_{i=1}^n (x_i-\bar{X})$
+
+$\sigma^2$
+
+---
+title: "NRE538_Resampling"
+author: "Feng-Hsun Chang"
+date: "2016.11.22"
+output: 
+  html_document:
+    code_folding: show
+    highlight: textmate
+    keep_md: yes
+    number_sections: true
+    theme: flatly
+    toc: yes
+    toc_float:
+      collapsed: false
+      smooth_scroll: true
+      toc_depth: 4
+
+---
+
+\newcommand\expect[1]{\mathbb{E}\left[{#1}\right]}
+\newcommand\var[1]{\mathrm{Var}\left[{#1}\right]}
+
+```{r, set global theme, include=FALSE}
+knitr::opts_chunk$set(fig.width=14, fig.height=14)
+```
+
+```{r, library loading, echo=FALSE, message=FALSE}
+library(rmarkdown)
+library(knitr) # Run R Code Chunks
+library(ggplot2) # For plotting
+library(DT) # Interactive HTML tables
+library(RCurl)
+library(dplyr)
+library(tidyr)
+library(scales)
+library(MASS)
+library(manipulate)
+```
+
+# Purpose/Benefits
+
+Given a population(e.g. measurements of the height of all high school students in Taiwan), we want to know the statistics of this population (e.g. the mean and variance). To do so, we often take samples from the population and make assumption on the distribuiton of these samples (sample distribution) and then based on the assumed sample distribution, we estimate the statistics of the population with associated variance of that estimator. For example, we would make assumption that the sample $X$ is a normal distribution, so that the sample mean ($\bar{X}$) should be the [unbiased](https://en.wikipedia.org/wiki/Bias_of_an_estimator) estimator of the population mean ($\mu$) and the $S^2 = \frac{1}{(n-1)^2} \sum_{i=1}^n (x_i-\bar{X})$ is the unbiased estimator of the population variance ($\sigma^2$).  
+
+However, the sample distribution is often hard to obtain (so we need to make assumptions) and so does the population distribution. We therefore use the available samples to estimate the empirical [cumulative density function (CDF)](https://en.wikipedia.org/wiki/Cumulative_distribution_function). From this empirical CDF, we sample many many times to estimate the sample distribution of any statistics of interest. __The procedure of to sample many many times is called the resampling procedure.__ From each sampling, we can calculate the statistics of interest, so the distribution constructed from these many samples are the sampling distribution of the statistics of interest. *Note that this resampling procedures do __NOT__ give us addition information than the sample (data)! It is just another method to estimate the sampling distribution of the statistics of interest.  
+
+In short, resampling method has the following [advantages](https://cran.r-project.org/web/packages/IPSUR/vignettes/IPSUR.pdf):  
+1. Fewer assumptions.  
+2. Greater accuracy.  
+3. Generality.  
+
+> General reampling procedures:  
+> 1. Create many samples with (seldomly without) replacement.  
+> 2. Calculate the statistics of interest (e.g. mean, variance).  
+> 3. The distribution of these statistics infers the information about the sampling distribution of the statistics of interest. 
+
+# Bootstrap mean/SE
+
+Let's try to estimate the distribution of mean and variance.  
+First we generate a fake population X of 1032 measurements from a normal distribution with mean equals to 10 and variance equals to 3.
+
+```{r, true pop}
+set.seed(2375)
+X = rnorm(1032, mean = 3, sd=3)
+```
+
+The true population mean (mean of X) is `r mean(X)` and the true variance is `r sum((X-mean(X))^2)/1032`.  
+Say we wanted estimate the mean and variance of this population, so we subsampled 32 measurements from the population. We now use the `sample()` funtion to do the subsample. 

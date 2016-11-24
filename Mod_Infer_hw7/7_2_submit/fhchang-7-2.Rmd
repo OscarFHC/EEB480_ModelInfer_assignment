@@ -1,0 +1,129 @@
+---
+title: "hw7_FHChang"
+author: "Feng-Hsun Chang"
+date: "2016.Nov.17"
+output: 
+  html_document:
+    code_folding: show
+    highlight: haddock
+    number_sections: FALSE
+    theme: yeti
+    toc: FALSE
+    toc_float:
+      collapsed: FALSE
+      smooth_scroll: TRUE
+---
+
+In this assignment, I use for loop to calculate the agreement between observation and predicted probability for different numbers of seed availability.  
+
+To calculate the agreement between observation and predicted probability, calculate the sum of square between observation and predicted probability.  
+
+In each loop, I first calculate the moments of both binomial ($n$ and $p$) and beta-binomial distribution($p$ and $\theta$) from the observation. I then used these estimated parameters to predict the probability of number of seeds being predated.  
+
+```{r}
+library(magrittr)
+library(plyr)
+library(ggplot2)
+library(emdbook) 
+library(reshape2)
+
+seeds = read.csv("http://kinglab.eeb.lsa.umich.edu/480/data/seedpred.csv",
+         comment.char="#",
+         colClasses=c(date="Date",station='factor',
+                      dist='factor',species='factor')) %>%
+  arrange(station,dist,species,date)
+
+seeds %>%
+  ddply(~station+dist+species,summarize,
+        avail=head(seeds,-1),
+        taken=-diff(seeds),
+        tint=diff(date)) %>%
+  subset(avail>0) -> dat
+
+moms.binom.all = c()
+moms.bb.all = c()
+pdf.all = c()
+error.all = c()
+
+for (i in 2:5){
+  subseeds = subset(dat,avail==i)
+  pl = ggplot(data=subseeds,mapping=aes(x=taken))+
+    geom_histogram(binwidth=1,fill=NA,color='black',
+                   mapping=aes(y=..density..))
+  
+  moms.binom = subseeds %>% summarize(n=unique(avail),p=mean(taken)/n)
+    ## calculate the moments of binomial distribution, which are the number of seed (n) the probability of seed predation (p)
+  moms.binom.all = rbind(moms.binom.all, moms.binom)
+    ## store the moments of binomial distribution to a data frame, "moms.binom.all"
+  pdf = data.frame(x=seq(0,i)) %>%
+    mutate(binom=dbinom(x=x,prob=moms.binom$p,size=moms.binom$n))
+    ## claculate the probability of certain number of seeds being predated according to a binomial distribution with parameters ("n" and "p") estimated from the observation.
+  
+  moms.bb = subseeds %>% 
+    summarize(n=unique(avail),m=mean(taken),v=var(taken),
+              p=m/n,theta=-n*(v-m*(n-m))/(n*v-m*(n-m)))
+    ## calculate hte moments of beta-binomial distribution, which are the probability (p) and dispersion parameter (theta)
+  moms.bb.all = rbind(moms.bb.all, moms.bb)
+    ## store the moments of beta-binomial distribution to a data frame, "moms.bb.all"
+  pdf = pdf %>% mutate(betabinom=dbetabinom(x=x,size=moms.bb$n,prob=moms.bb$p,theta=moms.bb$theta),
+                  obs = count(subseeds, vars = "taken")[,2]/nrow(subseeds))
+    ## claculate the probability of certain number of seeds being predated according to a beta-binomial distribution with parameters ("p" and "theta") estimated from the observation.
+    ## Also calculate the observed probability of seed predation
+  pdf.l = pdf %>% melt(id.var=c("x"), variable.name="fun", value.name="den")
+    ## preparing long data form for figure
+  pdf.all = rbind(pdf.all, pdf)
+    ## combine all the probabilities together
+  
+  p.final = pl+
+    geom_point(data = pdf.l[which(pdf.l$fun!="obs"),], aes(x=x, y=den, group=fun, color=factor(fun)), size=3)+
+    scale_colour_manual(name="distribution \n function",
+                        breaks=c("betabinom", "binom"),
+                        labels=c("betabinomial", "binomial"),
+                        values=c("red","blue"))+
+    labs(x="number of seeds taken", y="probability")+
+    theme_bw()+
+    theme(panel.grid.major=element_blank(),
+          panel.grid.minor=element_blank(),
+          strip.background = element_blank(),
+          panel.border=element_rect(color="black"),
+          legend.key = element_blank())
+  print(p.final)
+  
+  error = pdf %>% 
+    summarize(ebinom = sqrt(sum((binom-obs)^2)), ebb = sqrt(sum((betabinom-obs)^2)))
+    ## Here I calculate the sum of square of observe versus predicted probability as a way to demonstrate the agreement between data and prediction.
+  error.all = rbind(error.all, error)
+    ## I store the sum of square of the two model distributions, so that in the end I can see how the agreement change with number of seeds available. 
+}
+
+```
+
+These plots are the visualization of observation versus predicted probability in different seed number availability. The observation and predicted probability, I use the histogram is the observation, red dots are the prediction from binomial distribution, blue dots are the prediction from beta-binomial distribution. 
+
+* Note that when there is only one seed available, binomial distribution reduces to Bernoulli distribution. The overdispersion parameter in beta-binomial distribution would be -1 according to the formula. However, this overdispersion parameter should be positive.
+
+```{r}
+library(knitr)
+error.all = cbind(seq.int(from=2,to=5), error.all)
+  colnames(error.all) = c("seed availibility", "error of binomial distribution", "error of beta-binomial distribution")
+kable(error.all)
+```
+
+From the above table, we see that beta-binomial distribution always performs better than the binomial distribution (lower sum of square).  
+In addition, the sum of square gradually increase with the number of available seeds. This means that the agreement between observation and predicted probability gradually decrease with the number of available seeds. However, this could simply result from the fact that when there are more available seeds, there are therefore more comparisons to make. For example, when there are 4 available seeds, there are 4 comparisons between observation and predicted probability and therefore 4 sum of square to add up. To deal with this potential problem, I then divide the sum of square by the number of available seeds (number of comparisons). 
+
+```{r}
+error.all = error.all %>% 
+  mutate(meanSS_binom = error.all[,"error of binomial distribution"]/(error.all[,"seed availibility"]+1),
+         meanSS_bb = error.all[,"error of beta-binomial distribution"]/(error.all[,"seed availibility"]+1))
+
+  colnames(error.all) = c(colnames(error.all)[1:3], "mean error of binomial distribution", "mean error of beta-binomial distribution")
+
+kable(error.all)
+```
+
+This table show similar pattern that beta-binomial distribution also always performs better than the binomial distribution. This is not surprising to me as the beta-binomial distribution has the ability to capture the right skewed feature of the data (by the $\theta$ parameter). However, with the increase of the number of available seeds, the agreement gradually decrease. This strikes m a little bit as I thought the more the data, the more likely one could capture the pattern of the data more accurately. 
+
+One way to interprete the beta-binomial distribution is that a binomial distribution with the probability ($p$) being a random variable that follows a beta distribution (with $\alpha$ and $\beta$ parameters). 
+
+If I understand correctly, beta-binomial distribution can also be expressed in a form to have $\phi=1/(1+\theta)$ term that determines the right tail of the probability density function (overdispersion). When $\phi=1/(1+\theta)$ increase from 0 (infinitely large $\theta$) to 1 (infinitely small $\theta$), the right tail of the beta-binomial distribution gradually increase. Is this interpretation correct?
