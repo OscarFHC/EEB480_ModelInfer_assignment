@@ -1,0 +1,300 @@
+---
+title: "Exercise 8.2"
+author: "Ben Lee"
+date: "December 5, 2016"
+output: html_document
+---
+
+```{r,echo=FALSE,warning=FALSE}
+library(plyr)
+library(reshape2)
+library(magrittr)
+library(ggplot2)
+library(grid)
+library(scales)
+library(knitr)
+library(bbmle)
+library(manipulate)
+options(stringsAsFactors=FALSE)
+theme_set(theme_bw())
+```
+
+#Review of lab examples (don't grade)
+
+```{r,data,echo=FALSE}
+#Reading in data and naming variables
+read.csv("http://kinglab.eeb.lsa.umich.edu/480/data/gophertortoise.csv",
+  comment.char="#",colClasses=c(date="Date",
+    sex="factor",elisa="factor")) %>%
+  arrange(carapace.length,date) -> gt
+gt %>% ddply(~id,subset,date==min(date)) -> gt1
+```
+
+###Logistic Regression
+
+```{r,echo=FALSE}
+gt1 %<>% mutate(serostatus=ifelse(elisa=="neg",0,1)) #0 or 1
+
+loglik <- function (p, serostatus) {                 #log-likelihood function
+  sum(dbinom(x=serostatus,size=1,prob=p,log=TRUE))
+}
+
+nll <- function (a, b, carapace.length, serostatus) {
+  -loglik(p=plogis(a+b*carapace.length),serostatus)
+}
+
+fit <- mle2(nll,start=list(a=0,b=0),data=gt1)
+```
+
+As part of the lab, we determined the log-likelihood of the model in the lab to be `r loglik(p=0.5,gt1$serostatus)`. In addition, we used negative log likelihoods to predict the coefficients $a=$ `r coef(fit)[1]` and $b=$ `r coef(fit)[2]`. The fit had a log-likelihood of `r logLik(fit)`.
+
+Fit Profiles:
+
+```{r,echo=FALSE,fig.align='center'}
+pfit <- profile(fit)
+plot(pfit)
+```
+
+Confidence Intervals:
+
+```{r,echo=FALSE}
+confint(pfit)
+```
+
+#Assignment begins
+
+###How do we interpret the parameters?
+
+a - The risk of being seropositive for an average-sized animal
+
+> I think it's the probability of seropositive when the carapace length is at 0?
+
+b - The rate at which the log-likelihood odds ratio increases
+
+Visualizing fitted values:
+
+```{r,echo=FALSE,fig.align='center'}
+gt1 %<>% mutate(fitted=with(as.list(coef(fit)),plogis(a+b*carapace.length)))%>%
+  arrange(carapace.length)
+
+gt1 %>%
+  ggplot(aes(x=carapace.length,color=elisa))+
+  geom_point(aes(y=serostatus),position='jitter')+
+  geom_line(aes(y=fitted),color='black')
+```
+
+Visualizing entire likelihood surface:
+
+```{r,echo=FALSE,fig.align='center'}
+expand.grid(
+  a=seq(-9,-4,length=100),
+  b=seq(0.02,0.045,length=100)) %>%
+  ddply(~a+b,mutate,
+    loglik=-nll(a,b,gt1$carapace.length,gt1$serostatus)
+    ) -> params
+
+breaks <- logLik(fit)-qchisq(p=c(0.5,0.8,0.9,0.95,0.99,0.999,0.9999),df=2)/2
+
+params %>%
+  ggplot(aes(x=a,y=b,z=loglik))+
+  stat_contour(aes(color=..level..),breaks=breaks)+
+  geom_point(x=coef(fit)["a"],y=coef(fit)["b"],shape=3)+
+  labs(color=expression(log(L)))
+```
+
+###Exercise: What does the shape of the likelihood surface tell us about the identifiability of the parameters? What does it say about which aspects of the data are most informative?
+
+Looking at the shape of the log-likelihood surface in the above plot, the parameters are much better informative following the trajectory of the ridge that goes from the top left to the bottom right of the plot. Therefore, there are certain combinations of parameter values that are strongly identifiable that follow this trajectory whereas in any other trajectory they are poorly identified.
+
+I created a manipulate plot (which is not compatible with knitr), and varying a and b I found that the curve above maintains its shape if I move a and b in opposite directions (shown below, top two graphs) and fail to match the data if I move them in the same directions (shown below, bottom two graphs).
+
+Therefore, $a$ and $b$ affect each other because changes in one of the variables can be offset by a change in the opposite direction by the other one. $b$ appears to control the steepness of the curve (how quickly individuals become infected) and moving $a$ around shifts the curve.
+
+> I think this means that top left to bottom right trajectory is more noninformative as many parameter combinations can result in similar likelihood.
+
+```{r,echo=FALSE,fig.align='center'}
+par(mfrow=c(2,2))
+plot(x=gt1$carapace.length,y=gt1$serostatus,xlab=NA,ylab="serostatus",main="a=-5,b=0.027")
+  lines(x=gt1$carapace.length,y=plogis(-5+0.027*gt1$carapace.length))
+plot(x=gt1$carapace.length,y=gt1$serostatus,xlab=NA,ylab=NA,main="a=-7,b=0.036")
+  lines(x=gt1$carapace.length,y=plogis(-7.2+0.036*gt1$carapace.length))
+plot(x=gt1$carapace.length,y=gt1$serostatus,xlab="Carapace length",ylab="serostatus",main="a=-5,b=0.045")
+  lines(x=gt1$carapace.length,y=plogis(-5+0.045*gt1$carapace.length))
+plot(x=gt1$carapace.length,y=gt1$serostatus,xlab="Carapace length",ylab=NA,main="a=-7,b=0.020")
+  lines(x=gt1$carapace.length,y=plogis(-7.2+0.020*gt1$carapace.length))
+```
+
+###Exercise: Use `mle2` to fit the survival curve, assuming a constant force of infection and that $L \varpropto a$. Estimate the force of infection. What are its units? Use confidence intervals (CI) to quantify the uncertainty in your estimate. Make a plot that overlays the model predictions on the data. Plot the likelihood curve. Indicate the MLE and CI for different levels on your plot.
+
+The force of infection$(\lambda)$ has units of inverse length since $L*\lambda$ is unitless and L is in length (mm).
+
+$$\mathscr{L}(\lambda) = \prod L_i (\lambda)$$
+
+So, if i is positive:
+
+$$\mathscr{L}(\lambda) = 1 - exp(-\lambda L_i)$$
+
+and if i is negative:
+
+$$\mathscr{L}(\lambda) = exp(-\lambda L_i)$$
+
+> The "i" here, I think, should indicates individual ID, which is always positive then?
+
+```{r,echo=FALSE}
+loglik.lam <- function (lambda,carapace.length,serostatus) {  
+  sum(dbinom(x=serostatus,size=1,
+             prob=1-exp(-lambda*carapace.length),
+             log=TRUE))
+}
+
+nll.lam <- function (lambda, carapace.length, serostatus, ...) {
+  -loglik.lam(lambda,carapace.length,serostatus)
+}
+
+fit2 <- mle2(nll.lam,start=list(lambda=0.01),method="Brent",
+             lower=0.00001,upper=0.1,data=gt1)
+
+pfit2 <- profile(fit2)
+```
+
+Using `mle2`, we obtain an MLE of $\lambda =$ `r coef(fit2)` and 95% confidence intervals at `r confint(pfit2)[1]` and `r confint(pfit2)[2]`. Plotting the likelihood profile of $\lambda$ we see that there is a reasonably tight fit even at high CI's:
+
+```{r,fig.align='center',echo=FALSE}
+plot(pfit2)
+```
+
+Plotting the fit with the data, it doesn't look like this model does as good of a job as the previous model did. The fit looks like it doesn't accurately represent the data (shown below). This model probably does not fit the data well because it assumes that the risk of infection $(\lambda)$ is constant, even though from our earlier data exploration (not shown), it appears that the risk of infection increases with age (or at least size).
+
+```{r, fig.align='center',echo=FALSE}
+gt1 %<>% mutate(fitted2=with(as.list(coef(fit2)),1-exp(-lambda*carapace.length)))
+
+gt1 %>%
+  ggplot(aes(x=carapace.length,color=elisa))+
+  geom_point(aes(y=serostatus),position='jitter')+
+  geom_line(aes(y=fitted2),color='black')
+```
+
+Finally, plotting the likelihood curve with varying confidence intervals (where the red line is the MLE and the orange, blue, green, and purple lines represent the 99%, 95%, 90%, and 50% confidence intervals, respectively), we see that the likelihood drops off relatively quickly and therefore we can be somewhat confident in our estimation of $\lambda$:
+
+```{r,fig.align='center',echo=FALSE}
+expand.grid(
+  lambda=seq(0.004,0.008,length=100)) %>%
+  ddply(~lambda,mutate,
+    loglik.lam=-nll.lam(lambda,gt1$carapace.length,gt1$serostatus)
+    ) -> params2
+
+params2 %>%
+  ggplot(aes(x=lambda,y=loglik.lam))+
+  geom_line() + geom_vline(xintercept = coef(fit2)["lambda"],color="red")+
+  geom_vline(xintercept = confint(pfit2,level=0.99),color="orange",lty=2) +
+  geom_vline(xintercept = confint(pfit2,level=0.95),color="blue",lty=2)+
+  geom_vline(xintercept = confint(pfit2,level=0.9),color="green",lty=2)+
+  geom_vline(xintercept = confint(pfit2,level=0.5),color="purple",lty=2)
+```
+
+###Exercise: Investigate a two-parameter model in which the hazard increases with age. In general, when the force of infection depends on age, i.e., $\lambda = \lambda(a)$, the survival probability corresponding to Eq. 1 is
+
+$$P[X_i = neg] = exp\left(-\int_0^a \lambda(a) da \right)$$
+
+###You may assume that carapace length is a good proxy for age. Plot the likelihood surface using ggplot2 and facilities. What does the shape of your surface say about the identifiability of your parameters? Use `mle2` to attempt to find the MLE parameter estimates. Make a plot that overlays the model predictions on the data.
+
+Assuming a two-parameter exponential model where $a \varpropto L$ and thus $\lambda(L) = aL^b$:
+
+$$\int_0^L \lambda(\ell)d\ell = \int_0^L a(\ell)^b d\ell = \frac{a}{b+1}L^{b+1}$$
+$$p_i = 1 - exp(\frac{a}{b+1}L^{b+1})$$
+$$X_i \sim Binom(size=1,prob=p_i)$$
+
+Note, during class we discussed and explored the possibility that this is actually a three parameter model. Allowing for three parameters, we found that b was fairly well-estimated, but that a and our introduced third parameter of $L_0$ seemed to be redundant and have somewhat of a clear relationship as indicated by their likelihood surface, i.e.:
+
+> how do you know be is well-estimated? Just by mathmatical derivation?
+
+```{r,echo=FALSE, warning=FALSE,fig.align='center'}
+loglik.2p <- function (a,b,L0) {
+  p=1-exp(-(a/(b+1))*((gt1$carapace.length/L0)^(b+1)))
+  sum(dbinom(x=gt1$serostatus,size=1,prob=p,log=TRUE))
+}
+
+nll.2p <- function (a,b,L0, carapace.length, serostatus, ...) {
+  if((a>0) && (L0>0))
+    nll<- -loglik.2p(a,b,L0)
+  else
+    nll <- 1e10
+  nll
+}
+
+fit3 <- mle2(nll.2p,start=list(a=0.006,b=0,L0=100),data=gt1)
+
+expand.grid(
+  a=seq(from=0.0001,to=5,length=50),
+  b=coef(fit3)["b"],
+  L0=seq(from=110,to=300,length=50)
+) ->params3
+
+ddply(params3,~a+b+L0,mutate,loglik=loglik.2p(a,b,L0)) ->params3
+
+ggplot(data=params3,mapping=aes(x=a,y=L0,z=loglik,
+                                fill=ifelse(loglik>max(loglik)-100,loglik,NA)))+
+  geom_tile()+geom_contour(color='white',binwidth=4) + labs(fill="")
+```
+
+Therefore, this does in fact look more like a true 2-parameter model. The model estimates that a = `r coef(fit3)[1]`, b = `r coef(fit3)[2]`, and $L_0$ = `r coef(fit3)[3]`. Again, though, there is no meaningful estimate of the variation or our ability to predict a or $L_0$. Therefore, we need to hold one parameter constant in order to assess the predictability of the other. If we hold a constant at 1 in order to assess the fit to $L_0$:
+
+> This looks like a true 2-parameter model because one the likelihood contour of $L_0$ and $a$, $L_0$ and $a$ looks convertable? 
+
+```{r,echo=FALSE,fig.align='center',warning=FALSE}
+fit4 <- mle2(nll.2p,start=list(b=0,L0=100),fixed=list(a=1),data=gt1)
+
+expand.grid(
+  a=1,
+  b=seq(from=1,to=5,length=50),
+  L0=seq(from=100,to=200,length=50)
+) ->params4
+
+ddply(params4,~a+b+L0,mutate,loglik=loglik.2p(a,b,L0)) ->params4
+
+ggplot(data=params4,mapping=aes(x=b,y=L0,z=loglik,
+                                fill=ifelse(loglik>max(loglik)-100,loglik,NA)))+
+  geom_tile()+geom_contour(color='white',binwidth=4) + labs(fill="")
+```
+
+Conversely, if we hold $L_0$ at 150:
+
+```{r,echo=FALSE,fig.align='center',warning=FALSE}
+fit5 <- mle2(nll.2p,start=list(b=0,a=1),fixed=list(L0=150),data=gt1)
+
+expand.grid(
+  a=seq(from=0.1,to=2.5,length=50),
+  b=seq(from=1,to=5,length=50),
+  L0=150
+) ->params5
+
+ddply(params5,~a+b+L0,mutate,loglik=loglik.2p(a,b,L0)) ->params5
+
+ggplot(data=params5,mapping=aes(x=b,y=a,z=loglik,
+                                fill=ifelse(loglik>max(loglik)-100,loglik,NA)))+
+  geom_tile()+geom_contour(color='white',binwidth=4) + labs(fill="")
+```
+
+Before using this approach, we obtained error messages saying that the fit of a and $L_0$ were too flat to achieve good estimates. This was the result of there being a ridge on the likelihood service over which there are many combinations of a and $L_0$ that have equally good fits.
+
+Plotting the data with the model estimates above, we see that the curve looks like it fits the data a lot better from the single parameter model and looks similar to the first model we fit:
+
+```{r,echo=FALSE,warning=FALSE,fig.align='center'}
+gt1 %<>% mutate(fitted3=1-exp(-(coef(fit3)[1]/(coef(fit3)[2]+1))*
+                          ((gt1$carapace.length/coef(fit3)[3])^(coef(fit3)[2]+1))))
+
+gt1 %>%
+  ggplot(aes(x=carapace.length,color=elisa))+
+  geom_point(aes(y=serostatus),position='jitter')+
+  geom_line(aes(y=fitted3),color='black')
+```
+
+###Exercise: Compare your model, the constant-hazard model, and the logistic regression model fitted previously. Which models are nested? For nested models, use the likelihood ratio test to decide if more complex models provide significantly better explanations of the data. For all models, use the Akaike Information Criterion (AIC) to compare models. What other methods could you use to decide which of your models is best? Does your analysis of these data suggest any other models to you?
+
+It looks to me that the two latter models are nested since the two parameter model is just a modified version of the one parameter model. I was unsure how to structure the likelihood ratio test given the redundancy of a and $L_0$ in the two (/maybe three?) parameter model. However, we can still use AIC values, which indicate that the first model (the logistic regression) has the best fit:
+
+```{r,echo=FALSE}
+AIC(fit,fit2,fit3)
+```
+
+According to other members of the class, using a linear model instead of an exponential model yielded similar results as those found here and did not improve the fit at all. This is probably because of a related issue where two parameters in the model were somewhat redundant to each other. Therefore, it would be better to use a model where you do not run into that issue, although I am not sure what such a model would look like.

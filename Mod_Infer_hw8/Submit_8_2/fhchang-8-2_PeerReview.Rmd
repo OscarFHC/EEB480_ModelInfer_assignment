@@ -1,5 +1,5 @@
 ---
-title: "Assignment 8-1 Maximum Likelihood Lab"
+title: "Assignment 8-2 Maximum Likelihood Lab"
 author: "Feng-Hsun Chang"
 date: "2016 Nov. 15"
 output: 
@@ -30,58 +30,15 @@ library(knitr)
 theme_set(theme_bw())
 ```
 
+> You might consider adding a few sentences to introduce the reader to the data set (i.e. that you are looking at seropositivity in Gopher tortoises). 
+
 # Exercise 1
 
 * What does the shape of the likelihood surface tell us about the identifiability of the parameters? What does it say about which aspects of the data are most informative?
 
-The following is the likelihood contour of the original model with the `logit` function describing the hazard function and the `logit` function depends linearly on the carapath length ($L_i$), i.e. $\mathrm{logit}(p_i) = a + b\,L_i,$. 
+The following is the likelihood contour of the original model with the `logit` function describing the hazard function and the `logit` function depends linearly on the carapath length ($L_i$), i.e. $\mathrm{logit}(p_i) = a + b\,L_i,$. The red line indicates the carapace length at which the probability of seropositive is 50% given the estimated parameter "a" and "b". 
 
 ```{r, ecoh=FALSE, message=FALSE, warning=FALSE}
-gt = read.csv("http://kinglab.eeb.lsa.umich.edu/480/data/gophertortoise.csv",
-              comment.char="#",colClasses=c(date="Date",sex="factor",elisa="factor")) %>%
-     arrange(carapace.length,date)
-gt1 = gt %>% 
-  ddply(~id,subset,date==min(date)) %>% 
-  mutate(serostatus=ifelse(elisa=="neg",0,1))
-
-loglik = function (p, serostatus) {
-  sum(log(dbinom(x=serostatus,size=1,prob=p)))
-}
-
-nll = function (a, b, carapace.length, serostatus) {
-  -loglik(p=plogis(a+b*carapace.length),serostatus)
-}
-
-fit = mle2(nll,start=list(a=0,b=0),data=gt1)
-
-params = 
-  expand.grid(
-  a=seq(-9,-4,length=100),
-  b=seq(0.02,0.045,length=100)) %>%
-  ddply(~a+b,mutate,
-        loglik=-nll(a,b,gt1$carapace.length,gt1$serostatus)
-  )  
-
-breaks <- logLik(fit)-qchisq(p=c(0.5,0.8,0.9,0.95,0.99,0.999,0.9999),df=2)/2
-
-ggplot(data=params, aes(x=a,y=b,z=loglik))+
-  stat_contour(aes(color=..level..),breaks=breaks)+
-  geom_point(x=coef(fit)["a"],y=coef(fit)["b"],shape=3)+
-  labs(color=expression(log(L)))+
-  #geom_abline(slope=(coef(fit)["b"]/coef(fit)["a"]), intercept=0, col="red", size=1)+
-  theme_bw()+
-  theme(#panel.grid.major=element_blank(),
-        panel.grid.minor=element_blank(),
-        strip.background = element_blank(),
-        panel.border=element_rect(color="black"),
-        legend.key = element_blank())
-```
-
-This shape indicates that on a certain axis of parameter "a" and "b" combination, the likelihood of observing this given data are similar. Along this combination axis, the data are not informative to tell if the model is good enough to describe (or explain?) the data. 
-
-Here I add a line indicating the carapace length at which the probability of seropositive is 50% given the estimated parameter "a" and "b". 
-
-```{r, message=FALSE, warning=FALSE}
 gt = read.csv("http://kinglab.eeb.lsa.umich.edu/480/data/gophertortoise.csv",
               comment.char="#",colClasses=c(date="Date",sex="factor",elisa="factor")) %>%
      arrange(carapace.length,date)
@@ -122,12 +79,15 @@ ggplot(data=params, aes(x=a,y=b,z=loglik))+
         legend.key = element_blank())
 ```
 
-We see that along this axis, the data is rather not informative.  
+This shape indicates that on a certain axis of parameter "a" and "b" combination, the likelihood of observing this given data are fairly similar. Along this combination axis, the data are not informative to tell if the model is good enough to describe (or explain?) the data. 
+
 I now try another model to describe the data with another model that intends to describe how much the probability of seropositive would change when an individual grows larger (or is smaller) than a certain carapace length. This carapace length is the length where the probability of seropositive is 50% given the estimated parameter "a (`r round(coef(fit)["a"], 4)`)" and "b (`r round(coef(fit)["b"],4)`)" in the previous model. So the odds ration function becomes the following. 
 
 $$\mathrm{logit}(p_i) = p_0 + p_1(L_i-`r round(-(coef(fit)["a"]/coef(fit)["b"]), 3)`)$$, 
 
 where $p_0$ is the probability of seropositive when the carapace length is at `r round(-(coef(fit)["a"]/coef(fit)["b"]), 3)`, and $p_1$ is the change of seropositive probability when the individual grows larger (or is smaller) then `r round(-(coef(fit)["a"]/coef(fit)["b"]), 3)`. 
+
+> Perhaps you could be a little more explicit about why this model is an improvement on your first model. If this models describes how much the probability of seropositivity changes when an individual grows, what does the first model do? 
 
 ```{r}
 L50 = -(coef(fit)["a"]/coef(fit)["b"])
@@ -166,6 +126,8 @@ ggplot(data=params.1, aes(x=p0, y=p1, z=loglik))+
 
 We see that the likelihood surface is different from the previous one. In this model, the two parameters looks more informative than the previous two ("a" and "b") as the surface becomes more rounded. This indicates that the changes in either p0 and p1 parameters would lead to large decrease in likelihood. This model is also easier to interpret. The "p0" parameter means the probability of seropositive when the carapace is at `r round(-(coef(fit)["a"]/coef(fit)["b"]), 3)`. The "p1" parameter means the rate of increase when an individual grow larger than `r round(-(coef(fit)["a"]/coef(fit)["b"]), 3)` in exponential scale. For example, with 1 mm increase in carapace length, the probability of seropositive would increase `r round(exp(coef(fit.1)["p1"]),3)`%. 
 
+> Why is a rounded surface more informative? 
+
 # Exercise 2
 
 * Use `mle2` to fit the survival curve, assuming a constant force of infection and that $L \propto a$. Estimate the force of infection. What are its units? Use confidence intervals (CI) to quantify the uncertainty in your estimate. Make a plot that overlays the model predictions on the data. Plot the likelihood curve. Indicate the MLE and CI for different levels on your plot.
@@ -173,7 +135,10 @@ We see that the likelihood surface is different from the previous one. In this m
 Here I'm using the following exponential function to model the increase of seropositive probability with carapace length. 
 
 ```{r}
-curve(1-exp(-(x*0.006)),from=0,to=350, ylab="cumulative probability", main="CDF of exponential distribution")
+curve(1-exp(-(x*0.006)),from=0,to=350, 
+      xlab="carapath length",
+      ylab="cumulative probability of being sereopositive", 
+      main=expression(paste("CDF of exponential distribution with fixed", lambda)))
 ```
 
 ```{r, echo=FALSE, eval=FALSE}
@@ -202,25 +167,33 @@ I then calculate the confidence interval of the $\lambda$ parameter.
 ```{r, message=FALSE, echo=FALSE}
 pfit.2 = profile(fit.2)
 confint(fit.2)
-plot(pfit.2, main="lambda from PDF modeling")
+plot(pfit.2, main=expression(paste0(lambda, "from PDF modeling")))
 ```
 
-I then overlay the model predictions on the data.
+> Explain how this plot is useful/should be interpreted. It might not be necessary to include, if you don't want or need to discuss it. The title seems a little funky. 
 
-```{r}
+I then overlay the model predictions (blue line) with 95% confidence interval on the data.
+
+```{r, message=FALSE}
 gt1 = 
   gt1 %>% mutate(
-    fitted.exp=with(as.list(coef(fit.2)),pexp(carapace.length, rate=lam)))
+    fitted.exp=with(as.list(coef(fit.2)),pexp(carapace.length, rate=lam)),
+    fitted.low=with(as.list(coef(fit.2)),pexp(carapace.length, rate=confint(fit.2)[1])),
+    fitted.hi=with(as.list(coef(fit.2)),pexp(carapace.length, rate=confint(fit.2)[2])))
 
 gt1 %>%
   ggplot(aes(x=carapace.length))+
   geom_point(aes(y=serostatus, color=elisa))+
   geom_line(aes(y=fitted.exp, color="fitted"), size=1)+
+  geom_line(aes(y=fitted.low, color="low"), size=1)+
+  geom_line(aes(y=fitted.hi, color="hi"), size=1)+
   scale_color_manual(name="", 
-                     values=c(fitted="red", neg="grey", pos="black"),
-                     labels=c(fitted="fitted values", neg="seronegative", pos="seropositive"))+
+                     values=c(fitted="blue", neg="grey", pos="black", low="light blue", hi="light blue"),
+                     labels=c(fitted="fitted values", neg="seronegative", pos="seropositive", low="95% CI", hi="95% CI"))+
   ggtitle("exponential function")
 ```
+
+> Jittering the observed data might be useful. It's a bit difficult to tell where they are clumped. 
 
 From this plot we see that the fitted probability of seropositive increases with carapace length. The increasing rate, $\lambda$, is estimated to be `r coef(fit.2)`. The $\lambda$ is the exponential decreasing rate of the probability of seronegative. The unit of $\lambda$ is $mm^{-1}$.
 
@@ -230,12 +203,19 @@ From this plot we see that the fitted probability of seropositive increases with
 
 Here I make the infection hazard a function of carapace length. I first try the hazard function in the Michaelis-Menten form. 
 
-$$\lambda(L) = \frac{r_mL}{K+L}$$,  
-where $r_m$ is the highest probability an individual could be infected, and $K$ describes the carapace length where the individual has half of the $r_m$. 
+$$\lambda(L) = \frac{r_m\,L}{K+L}$$,  
+
+where $r_m$ determines the maximum decreasing rate of sereonegative probability (i.e. maximum $\lambda$). This maximum $\lambda$ occurs when the carapace length is approaching zero. The $K$ describes the carapace length where the individual has half of the $r_m$. 
+
+> Why did you choose the Michaelis Menton equation? 
 
 Accordingly, the CDF the determines the probability of an individual to be seropositive is 
 
-$$\prob{X_i=\text{pos}} = 1 - \exp{\left[-\int_0^L\!\lambda(L)\dd{L}\right]} = 1 - \exp{\left [r_m (L - K*Log(K + L)  \right ]}$$.
+$$\prob{X_i=\text{pos}} = 1 - \exp{\left[-\int_0^L\!\lambda(L)\dd{L}\right]} = 1 - \exp{\left[-r_m\,K (\frac{L}{K} - Log(1 + \frac{L}{K}) \right ]}$$.
+
+This CDF indicates that when an individual is small, it is less likely to be sereopositive, but it is more likely to be infected (the increasing rate of seropositive). 
+
+The CDF of the sereopositive probability function is the following. 
 
 ```{r, warning=FALSE}
 loglik = function (p, serostatus) {
@@ -243,27 +223,12 @@ loglik = function (p, serostatus) {
 }
 
 nll.3 = function (rm, K, carapace.length, serostatus) { 
-  ll <- -loglik(p= 1 - exp(-rm*K*(carapace.length/K - log(1+(carapace.length/K)))), serostatus)
-  if (!is.finite(ll)) print(c(rm,K,ll))
-  ll
+  -loglik(p= 1 - exp(-rm*K*(carapace.length/K - log(1+(carapace.length/K)))), serostatus)
+  #if (!is.finite(ll)) print(c(rm,K,ll))
+  #ll
 }
-
-rm=0.1
-K=10
-L=300
-rm*(L -K*log(K+L))
 
 fit.3 = mle2(nll.3, start=list(rm=0.1, K=10),data=gt1, trace=TRUE)
-
-nll.3 = function (data, par) { 
-  with(data, -loglik(p=1-exp(-par[1]*(data[,"carapace.length"] - par[2]*log(par[2]+data[,"carapace.length"]))), data[,"serostatus"]))
-}
-
-optim(par=c(0.9, 50), nll.3, method="L-BFGS-B", lower=c(0.1,0), upper=c(1,max(gt1[,"carapace.length"])), data=gt1, hessian=TRUE)
- ## This is always failing becasue the probability is easily larger than 1 or smaller than 0....
- ## I think there is something wrong with the CDF formula. 
-1-exp(-par[1]*(data1[,"carapace.length"] - par[2]*log(par[2]+data1[,"carapace.length"])))
-
 
 coef(fit.3)
 logLik(fit.3)
@@ -271,24 +236,34 @@ logLik(fit.3)
 
 * Note that, similar to previous model (the model with constant hazard), there are some negative $\lambda$ would produce probabilities that generate NaN when being used to calculate likelihood.
 
-The estimated maximum decreasing rate of the probability of seropositive ("rm") is `r round(coef(fit.4)["rm"], 4)` and the carapace length that would render half of the maximum decreasing rate is about `r round(coef(fit.4)["Kr"], 3)`mm. The associated maximum likelihood is `r logLik(fit.4)`. However, I found this model not intuitive to interpret, since the model describes the change of exponential decreasing rate not the probability per se.  
+The estimated maximum decreasing rate of the probability of seropositive ($r_m$) is `r round(coef(fit.3)["rm"], 4)` and the carapace length ($K$) that would render half of the maximum decreasing rate is about `r round(coef(fit.3)["K"], 4)`mm. The associated maximum likelihood is `r logLik(fit.3)`. The CDF with estimated $r_m$ and $K$ is as follow.
+
+```{r}
+cdf = function(x, rm, K){
+  1-exp(-(rm*K*(x/K - log(1+(x/K)))))
+}
+curve(cdf(x, coef(fit.3)["rm"], coef(fit.3)["K"]),from=0,to=350, 
+      xlab="carapath length",
+      ylab="cumulative probability of being sereopositive", 
+      main=expression(paste("CDF of exponential distribution with ", lambda, " increase with carapace length")))
+```
 
 I now construct the likelihood contour. 
 
-```{r}
-params.4 = 
+```{r, warning=FALSE}
+params.3 = 
   expand.grid(
   rm=seq(0, 0.25, length=100),
-  Kr=seq(0, 350, length=100)) %>%
-  ddply(~rm+Kr, mutate,
-        loglik=-nll.4(rm, Kr, gt1$carapace.length, gt1$serostatus)
+  K=seq(0, 350, length=100)) %>%
+  ddply(~rm+K, mutate,
+        loglik=-nll.3(rm, K, gt1$carapace.length, gt1$serostatus)
   )  
 
-breaks.4 = logLik(fit.4)-qchisq(p=c(0.5,0.8,0.9,0.95,0.99,0.999,0.9999),df=2)/2
+breaks.3 = logLik(fit.3)-qchisq(p=c(0.5,0.8,0.9,0.95,0.99,0.999,0.9999),df=2)/2
 
-ggplot(data=params.4, aes(x=rm, y=Kr, z=loglik))+
-  geom_contour(aes(color=..level..), breaks=breaks.4)+
-  geom_point(x=coef(fit.4)["rm"], y=coef(fit.4)["Kr"], shape=3)+
+ggplot(data=params.3, aes(x=rm, y=K, z=loglik))+
+  geom_contour(aes(color=..level..), breaks=breaks.3)+
+  geom_point(x=coef(fit.3)["rm"], y=coef(fit.3)["K"], shape=3)+
   labs(color=expression(log(L)))+
   theme_bw()+
   theme(#panel.grid.major=element_blank(),
@@ -298,28 +273,33 @@ ggplot(data=params.4, aes(x=rm, y=Kr, z=loglik))+
         legend.key = element_blank())
 ```
 
-I found that this contour is wired as the estimated value is not at the central of the contour...In addition, the two parameters here are not informative to judge the model. 
+I found that this model is rather non-informative again as there is a large area where the combinations of $r_m$ and $K$ would have similar likelihood. 
 
 Here I overlay the fitted seropositive probability to the data.
 
 ```{r}
 gt1 = 
   gt1 %>% mutate(
-    fitted.MM1=with(as.list(coef(fit.4)),pexp(carapace.length, rate=rm*(carapace.length/(Kr+carapace.length)))))
+    fitted.MM=with(as.list(coef(fit.3)),pexp(carapace.length, rate=rm*(carapace.length/(K+carapace.length)))))
 
 gt1 %>%
   ggplot(aes(x=carapace.length))+
   geom_point(aes(y=serostatus, color=elisa))+
-  geom_line(aes(y=fitted.MM1, color="fitted"), size=1)+
+  geom_line(aes(y=fitted.MM, color="fitted"), size=1)+
   scale_color_manual(name="", 
                      values=c(fitted="red", neg="grey", pos="black"),
                      labels=c(fitted="fitted values", neg="seronegative", pos="seropositive"))+
   ggtitle("Exponential-Michaelis_Menten function")
 ```
 
-The above model is rather not strait forward to me. I therefore tried the following model that is also determined by two parameters and a Michaelis-Menten function. The Michaelis-Menten function used here is to determine the probability of seropositive directly, but not the rate of exponential decreasing rate of the exponential function. 
+> Again, could/should you "jitter" the observed data? 
 
-Here I use Michaelis-Menten function to generate a probability of seropositive and then used the generated probability to calculate the associated likelihood. I then use the `optim` function to find the two parameters in the Michaelis-Menten function that lead to the maximum likelihood. These two parameters are the maximum probability ("p.max") and the carapace length that renders 50% of possibility of seropositive ("K").  
+The above model has clear mechanism that describe the behavior of each individual but it is not informative in terms of the fitted parameters. 
+
+> Make it clear you are testing a different model below. 
+
+Here I model the CDF of sereopositive probability directly with the Michaelis-Menten function. However, this is rather not mechanistic as it does not clearly describe the bahavior of each individual (i.e. how the probability of sereopositive increase with carapath length).  
+I then use the `optim` function to find the two parameters in the Michaelis-Menten function that lead to the maximum likelihood. These two parameters are the maximum probability ("p.max") for an individual to be sereopositive and the carapace length that renders 50% of possibility of seropositive ("Km").  
 
 Note that I constrain the "p.max" to be from 0 to 1. Otherwise it is not biologically feasible. 
 
@@ -328,35 +308,35 @@ loglik = function (p, serostatus) {
   sum(log(dbinom(x=serostatus,size=1,prob=p)))
 }
 
-nll.3 = function (data, par) { 
+nll.4 = function (data, par) { 
   with(data, -loglik(p=par[1]*(data[,"carapace.length"]/(par[2]+data[,"carapace.length"])), data[,"serostatus"]))
 }
 
-fit.3 = optim(par=c(0.1, 50), nll.3, method="L-BFGS-B", lower=c(0,0), upper=c(1,max(gt1[,"carapace.length"])), data=gt1, hessian=TRUE)
+fit.4 = optim(par=c(0.1, 50), nll.4, method="L-BFGS-B", lower=c(0,0), upper=c(1,max(gt1[,"carapace.length"])), data=gt1, hessian=TRUE)
 
-p.max=fit.3$par[1]
-K=fit.3$par[2]
-ML=-fit.3$value
+p.max=fit.4$par[1]
+Km=fit.4$par[2]
+ML=-fit.4$value
 ```
 
-The max probability of seropositive is `r p.max` and the carapace length that would render 50% of possibility of seropositive is about `r round(K, 3)`mm. The associated maximum likelihood is `r ML`. It is not surprising that the "p.max" parameter is 1. However, I found it intriguing that the carapace length that renders 50% of probability of seropositive is about half of that in the first model (`r -(coef(fit)["a"]/coef(fit)["b"])`). This suggests to me that the fundamental differences between the model can results in different estimates, although the biological interpretations are similar. 
+The max probability of seropositive is `r p.max` and the carapace length that would render 50% of possibility of seropositive is about `r round(Km, 3)`mm. The associated maximum likelihood is `r ML`. It is not surprising that the "p.max" parameter is 1 as there is always individuals that are sereopositive. However, I found it intriguing that the carapace length that renders 50% of probability of seropositive is about half of that in the first model (`r -(coef(fit)["a"]/coef(fit)["b"])`). This suggests to me that the fundamental differences between the model can results in different estimates, although the biological interpretations are similar. 
 
 Now I construct the likelihood surface of the two parameters. 
 
 ```{r}
-params.3 = 
+params.4 = 
   expand.grid(
   pm=seq(0, 1, length=100),
-  K=seq(0, 350, length=100)) %>%
-  ddply(~pm+K, mutate,
-        loglik=-nll.3(data=gt1, par=c(pm, K))
+  Km=seq(0, 350, length=100)) %>%
+  ddply(~pm+Km, mutate,
+        loglik=-nll.4(data=gt1, par=c(pm, Km))
   )  
 
-breaks.3 <- -fit.3$value-qchisq(p=c(0.5,0.8,0.9,0.95,0.99,0.999,0.9999),df=2)/2
+breaks.4 <- -fit.4$value-qchisq(p=c(0.5,0.8,0.9,0.95,0.99,0.999,0.9999),df=2)/2
 
-ggplot(data=params.3, aes(x=pm, y=K, z=loglik))+
-  geom_contour(aes(color=..level..), breaks=breaks.3)+
-  geom_point(x=fit.3$par[1], y=fit.3$par[2], shape=3)+
+ggplot(data=params.4, aes(x=pm, y=Km, z=loglik))+
+  geom_contour(aes(color=..level..), breaks=breaks.4)+
+  geom_point(x=fit.4$par[1], y=fit.4$par[2], shape=3)+
   labs(color=expression(log(L)))+
   theme_bw()+
   theme(#panel.grid.major=element_blank(),
@@ -366,16 +346,14 @@ ggplot(data=params.3, aes(x=pm, y=K, z=loglik))+
         legend.key = element_blank())
 ```
 
-From the figure, we see that both parameters are informative with confidence interval of "p.max" parameter ranges from about 0.96 to 1 and "K" parameter ranges from about 80 to 110. 
-
-<span style="color:maroon"> Question </span>: I can't figure out how to manually calculate the confidence interval of the parameters estimated by the `optim` function. I guess I don't fully understand how to back calculate the parameter values that renders certain likelihood value. 
+From the figure, we see that both parameters are informative with confidence interval of "p.max" parameter ranges from about 0.96 to 1 and "Km" parameter ranges from about 80 to 110. 
 
 Now I overlay the fitted probability onto the data.
 
 ```{r}
 gt1 = 
   gt1 %>% mutate(
-    fitted.MM=fit.3$par[1]*(gt1[,"carapace.length"]/(fit.3$par[2]+gt1[,"carapace.length"])))
+    fitted.MM=fit.4$par[1]*(gt1[,"carapace.length"]/(fit.4$par[2]+gt1[,"carapace.length"])))
 
 gt1 %>%
   ggplot(aes(x=carapace.length))+
@@ -391,28 +369,32 @@ The fitted probability of this model is the one with lowest predicted seropositi
 
 # Exercise 4
 
-So far, I have fitted 5 models with different link functions ($p_i$ is the probability of seropositive) to the data .  
-1.Generic logistic function. 
+> Include the prompt for this exercise, as you did with exercises 1 through 3. I believe we were also asked to comment on any other models suggested by the data or methods of testing our models that might be appropriate. 
+
+So far, I have fitted 5 models with different functions describing the probability of sereopositive (i.e. one minus the survival function; $p_i$ is the probability of seropositive) to the data .  
+1.A generic logistic function. 
 $$\mathrm{logit}(p_i) = a + bL_i$$ 
 
-2.modified logistic function.  
-$$\mathrm{logit}(p_i) = p_0 + p_1(L_i-`r round(-(coef(fit)["a"]/coef(fit)["b"]), 3)`)$$, 
+2.A modified logistic function.  
+$$\mathrm{logit}(p_i) = p_0 + p_1(L_i-`r round(-(coef(fit)["a"]/coef(fit)["b"]), 3)`)$$,  
+
 where $p_0$ is the probability of seropositive when the carapace length is at `r round(-(coef(fit)["a"]/coef(fit)["b"]), 3)`, and $p_1$ is the change of seropositive probability when the individual grows larger (or is smaller) then `r round(-(coef(fit)["a"]/coef(fit)["b"]), 3)`. 
 
-3.exponential function with constant hazard ($\lambda$, seronegative decreasing rate).  
+3.An exponential function with constant hazard ($\lambda$, "seronegative"" decreasing rate).  
 $$p_i = \exp{\left(-\lambda\,L_i\right)}$$  
 
-4.exponential function with hazard ($\lambda$) increasing with a Mechaelis-Menten function of carapace length ($L_i$).  
+4.An exponential function with hazard ($\lambda$) increasing with carapace length ($L_i$) in a Mechaelis-Menten function fashion.  
 $$p_i = \exp{\left(-\lambda(L_i)\,L_i\right)}$$, and
-$$\lambda(L_i) = rm(\frac{L_i}{Km+L_i})$$, 
-where $rm$ determines the maximum exponential decreasing rate and $Kr$ determines the carapace length that renders half of the maximum decreasing rate. 
+$$\lambda(L_i) = r_m(\frac{L_i}{K+L_i})$$, 
+where $r_m$ determines the maximum exponential decreasing rate and $K$ determines the carapace length that renders half of the maximum decreasing rate. 
 
-5.seropostive probability increase with a Mechaelis-Menten function of carapace length
-$$p_i = pm(\frac{L_i}{K+L_i})$$, 
-where $pm$ determines the maximum probability of seropositive and $K$ determines the carapace length that renders half of the maximum seropositive probability.  
+5.Sereopositive probability function per se follows a Mechaelis-Menten function.  
+
+$$p_i = p.max\,(\frac{L_i}{Km+L_i})$$, 
+
+where $p.max$ determines the maximum probability of seropositive and $Km$ determines the carapace length that renders half of the maximum seropositive probability.  
 
 Now I campare the AIC value of these 5 models, since none of these models are nested.  
-<span style="color:maroon"> Question </span>: Not sure if Model 4 is nested in Model 3. I'm not entirely clear about how to judge if two models are nested. 
 
 ```{r}
 AICtable=data.frame()
@@ -424,14 +406,15 @@ for (i in 1:5){
 AICtable[1,2] = round(AIC(fit),3)
 AICtable[2,2] = round(AIC(fit.1),3)
 AICtable[3,2] = round(AIC(fit.2),3)
-AICtable[4,2] = round(AIC(fit.4),3)
-AICtable[5,2] = round(2*fit.3$value+2*length(fit.3$par),3)
+AICtable[4,2] = round(AIC(fit.3),3)
+AICtable[5,2] = round(2*fit.4$value+2*length(fit.4$par),3)
   colnames(AICtable)=c("Model", "AIC value")
 
 kable(AICtable)
+
+AIC(fit, fit.1)
 ```
 
-From the above table, I see that model 1 and 2 (the generic logistic link function) performs the best from the five. However, Model 2 (modified logistic link function) would be the better than Model 1 as the parameters are more informative and easier to interpret. The other three models are not comparable probably due to the fact that there is an inflection point in the increasing pattern of seropositive probability. The logistic function is the only function that captures this inflection point. This makes me wonder if there is another link function that also have this kind of feature.  
+From the above table, I see that model 1 and 2 (the generic logistic link function) performs the best from the five. However, Model 2 (modified logistic link function) would be the better than Model 1 as the parameters are more informative and easier to interpret. The third model (constant hazard) can be improved when making the hazard increase with carapath length nonlinearly (the model 4), but using exponential function to describe the survival function is not comparable to the models that use logit function. The final model that uses Mechaelis-Menten function to describe the survival function is even worse and does not imply clear mechanism. 
 
-
-
+> Overall, very nice assignment. I tried to point out a few places where you could make your worker clearer to a naive reader, but feel free to incorporate or ignore the suggestions as you see fit! 

@@ -257,20 +257,22 @@ In the Thrips data set, the two density dependency models do not fit well. Less 
 
 > But does one appear to fit better, according to the plots? Can you plot both models with the data on a single pair of axes?
 
+> OSCAR: how do you tell which one fit better if not looking at the R2?
+
 # Exercise 6
 
-Here I use $t$-test to test whether the slope estimation is significantly different from 0 and use $F$-test to test whether the model with explanatory variable (i.e. with intercept and slope in this case) can explain significantly more variance than the one without explanatory variable (i.e. with only intercept in this case).
+Here I use `t-test` to test whether the slope estimation is significantly different from 0 and use `F-test` to test whether the model with explanatory variable (i.e. with intercept and slope in this case) can explain significantly more variance than the one without explanatory variable (i.e. with only intercept in this case).
 
 ```{r}
 summary(parus.lm.ricker)
 anova(parus.lm.ricker)
 ```
 
-The significance of the population size in the $t-test$ indicates the influences of population size on $log\frac{N_t} {N_{t-1}}$ is significantly different from 0 (the purpose of $t-test$). The significance in the $F-test$ indicates the model with population size as explanatory variable explains greater amount of variance of $log\frac{N_t} {N_{t-1}}$ than the model without population size as explanatory variable.
+The significance of the population size in the `t-test` indicates the influences of population size on $log\frac{N_t} {N_{t-1}}$ is significantly different from 0 (the purpose of `t-test`). The significance in the `F-test` indicates the model with population size as explanatory variable explains greater amount of variance of $log\frac{N_t} {N_{t-1}}$ than the model without population size as explanatory variable.
 
-In terms of the amount of variance being explained, we can see that the $t-test$ performed on the slope estimation is identical to the $F-test$ performed on the model. This is because the influences of a explanatory variable in a model is the amount of variance explained by this explanatory variable. In this case, after include population size as explanatory variable, sum of squared error is being reduced from $`r var(parus.ex2$ratio)*(nrow(parus.ex2)-1)`$ (this is the total sum of square) to $`r anova(parus.lm.ricker)[2,2]`$. The amount of this reduction is the $R^2$ estimated in the linear model (`r summary(parus.lm.ricker)$r.squared`).  
+In terms of the amount of variance being explained, we can see that the `t-test` performed on the slope estimation is identical to the `F-test` performed on the model. This is because the influences of a explanatory variable in a model is the amount of variance explained by this explanatory variable. In this case, after include population size as explanatory variable, sum of squared error is being reduced from `r round(var(parus.ex2$ratio)*(nrow(parus.ex2)-1),3)` (this is the total sum of square) to `r round(anova(parus.lm.ricker)[2,2],3)`. The amount of this reduction is the $R^2$ estimated in the linear model (`r round(summary(parus.lm.ricker)$r.squared,3)`).  
 
-In terms of the significance of the influence of population size, p value from the $t-test$ performed on the slope estimation is identical to the $F-test$ performed on the model. The probability for the model without population size as explanatory variable to reduce the same amount of sum of square error is $`r summary(parus.lm.ricker)$coefficients[2,4]`$ (i.e. the results from $t-test$). This probability is identical to the p value in the $F-test$ ($`r signif(anova(parus.lm.ricker)[1,5],2)`$).
+In terms of the significance of the influence of population size, p value from the `t-test` performed on the slope estimation is identical to the `F-test` performed on the model. The probability for the model without population size as explanatory variable to reduce the same amount of sum of square error is $`r summary(parus.lm.ricker)$coefficients[2,4]`$ (i.e. the results from `t-test`). This probability is identical to the p value in the `F-test` ($`r signif(anova(parus.lm.ricker)[1,5],2)`$).
 
 # Exercise 7
 
@@ -302,55 +304,77 @@ The shaded area (standard error of the linear model) gradually increase with the
 
 # Exercise 8
 
-To calculate the standard error of carrying capacity by the delta method, I first use `lm()` function to estimate the $\beta$ matrix, which I name it "B". Then I calculate the variance-covariance matrix of this $\beta$ matrix. I also write a transformation function that transforms the $\beta_i$ I derive from the linear model to the r and K in the Ricker model. Finally, according to the "delta method", the variance (or standard error) of the transformed parameters could be approximated by $$JVar[\beta]J^T$$, where $J$ is the Jacobian matrix of the $\beta$ matrix evaluated and $Var[\beta]$ is the variance-covariance of the $\beta$ matrix.
+To calculate the standard error of carrying capacity by the delta method, I first use `lm()` function to estimate the $\hat{\beta}$ matrix, which I name it "B". Then I calculate the variance-covariance matrix of this $\hat{\beta}$ matrix. I also write a transformation function that transforms the $\hat{\beta_i}$ I derive from the linear model to the r and K in the Ricker model. Finally, according to the "delta method", the variance (or standard error) of the transformed parameters could be approximated by $$JVar[\hat{\beta}]J^T$$, where $J$ is the Jacobian matrix of the $\hat{\beta}$ matrix and $Var[\beta]$ is the variance-covariance of the $hat{\beta}$ matrix.  
+
+I found three methods to calculate the standard error of r and K.  
+1. Derive and code the transformation matrix ($\theta$) that transform $\hat{\beta}$ matrix to r and K in the Ricker model. Then use the numerical solver in R calculate the Jacobian matrix evaluated at $\hat{\beta}$.  
+2. Derive and code the Jacobian matrix ($J$) manually and evaluate it at the $\hat{\beta}$ matrix.  
+3. Use a package (`msm`) that calculate it.  
+
+Here I show the first and third method to calculat the standard error for r and K parameter in the Ricker model. 
+
+```{r, echo=FALSE, eval=FALSE}
+B.rick = summary(parus.lm.ricker)$coefficients[,1]
+vcovB.rick = vcov(parus.lm.ricker) # variance-covariance matrix of the linear model (Ricker model)
+
+Jacb.rick = function(Beta){
+  f1 = c(1, 0)
+  f2 = c(-1/Beta[2], Beta[1]/(Beta[2]^2))
+  as.matrix(rbind(f1, f2))
+}
+
+se.rick = sqrt(diag( Jacb.rick(B) %*% vcovB.rick %*% t(Jacb.rick(B)) ))
+```
 
 ```{r}
-B = summary(parus.lm.ricker)$coefficients[,1]
-vcovB = vcov(parus.lm.ricker) # variance-covariance matrix of the linear model (Ricker model)
+B.rick = summary(parus.lm.ricker)$coefficients[,1]
+vcovB.rick = vcov(parus.lm.ricker) # variance-covariance matrix of the linear model (Ricker model)
 
-fun2 = function(M){ # transformation function from coefficients to theta (carrying capacity in this case)
+theta.rick = function(M){ # transformation function from coefficients to theta (carrying capacity in this case)
+  theta1 = M[1]
   theta2 = -(M[1]/M[2])
+  c(theta1, theta2)
 }
 
 #install.packages("numDeriv")
 # Here I installed a package to calculate the Jacobian matrix evaluated at the beta = beta hat
 library(numDeriv)
 
-K.se = sqrt(jacobian(fun2, B) %*% vcovB %*% t(jacobian(fun2, B)))
-K.se
+se.rick = sqrt(diag( jacobian(theta.rick, B.rick) %*% vcovB.rick %*% t(jacobian(theta.rick, B.rick)) ))
+se.rick
 ```
 
-> Come on, Oscar, a little calculus won't kill you!
+> Come on, Oscar, a little calculus won't kill you! 
+> OSCAR: I'm dead...
 
-This K.se is the standard error of the K parameter in the Ricker model given the estimated parameters in the linear model.   
-I also found the following package that allows me to calculate the standard error of a parameter that is being transformed from the coefficients estimated in a model.
+The standard error of the r and K parameter in the Ricker model are `r se.rick[1]` and `r se.rick[2]` respectively.  
+Here is the third method that allows me to calculate the standard error of a parameter that is being transformed from the coefficients estimated in a model.
 
 ```{r}
 library(msm)
-deltamethod(~ -(x1/x2), coef(parus.lm.ricker), vcov(parus.lm.ricker))
+se.rick3 = c(deltamethod(~ x1, coef(parus.lm.ricker), vcov(parus.lm.ricker)), deltamethod(~ -(x1/x2), coef(parus.lm.ricker), vcov(parus.lm.ricker)))
+             
+se.rick3
 ```
 
-The two values are the same, so this standard error should be correct.
+The standard error estimated by the two methods are the same, so this calculation should be correct.
 
-Here I go on to calculate the standard error of the carrying capacity in the Gompertz model.
+Here I go on to calculate the standard error of the carrying capacity in the Gompertz model with the second method.
 
 ```{r}
-B = summary(parus.lm.gomp)$coefficients[,1]
-vcovB = vcov(parus.lm.gomp) # variance-covariance matrix of the linear model (Ricker model)
+B.gomp = summary(parus.lm.gomp)$coefficients[,1]
+vcovB.gomp = vcov(parus.lm.gomp) # variance-covariance matrix of the linear model (Ricker model)
 
-fun2 = function(M){ # transformation function from coefficients to theta (carrying capacity in this case)
-  theta2 = exp(M[1]/-M[2])
+Jacb.gomp = function(Beta){
+  f1 = c(0, -1/Beta[2])
+  f2 = c(exp(-Beta[1]/Beta[2])*(-1/Beta[2]), exp(-Beta[1]/Beta[2])*(Beta[1]/(Beta[2]^2)))
+  as.matrix(rbind(f1, f2))
 }
 
-#install.packages("numDeriv")
-# Here I installed a package to calculate the Jacobian matrix evaluated at the beta = beta hat
-library(numDeriv)
-
-K.se = sqrt(jacobian(fun2, B) %*% vcovB %*% t(jacobian(fun2, B)))
-K.se
-
-deltamethod(~ exp(x1/-x2), coef(parus.lm.gomp), vcov(parus.lm.gomp))
+se.gomp = sqrt(diag( Jacb.gomp(B.gomp) %*% vcovB.gomp %*% t(Jacb.gomp(B.gomp)) ))
 ```
+
+The standard error of the r and K parameter in the Gompertz model are `r se.gomp[1]` and `r se.gomp[2]` respectively.  
 
 # Exercise 9
 
@@ -423,26 +447,36 @@ acf(thrip.ex2$ratio, main="autocorrelation plot of growth rate")
 
 From the plot of autocorrelation function, we see that there is a 4-month seasonality pattern in both population density (pop.log) and the growth rate (ratio).
 
-I therefore fit the linear model with interaction terms of population size and each month. By doing so, I can inspect whether the influences of population size on $log\frac{N_t} {N_{t-1}}$ are different in different month.
+I therefore fit following 3 models along with the model that does not consider seasonality:   
+1. A model that includes population size and its interaction between population size and month (a factor), so that I can inspect whether the influences of population size on $log\frac{N_t} {N_{t-1}}$ are different in different month.   
+2. A model that includes population size and month (a factor), so that I can inspect whether different month has different intercept, but the influences of population size on $log\frac{N_t} {N_{t-1}}$ are identical in different months.  
+3. A model includes population size, month and interaction between population size and month, so that both intercept and influence of population size are different in different months.  
 
 ```{r}
 thrip.ex2[,"month"]=as.factor(thrip.ex2[,"month"])
 thrip.lm.gomp=lm(ratio~pop.log, data=thrip.ex2)
 summary(thrip.lm.gomp)
-thrip.season.gomp = lm(ratio~pop.log + pop.log:month, data=thrip.ex2)
-summary(thrip.season.gomp)
+
+thrip.season1.gomp = lm(ratio~pop.log + pop.log:month, data=thrip.ex2)
+summary(thrip.season1.gomp)
+
+thrip.season2.gomp = lm(ratio~pop.log + month, data=thrip.ex2)
+summary(thrip.season2.gomp)
+
+thrip.season3.gomp = lm(ratio~pop.log + pop.log*month, data=thrip.ex2)
+summary(thrip.season3.gomp)
 ```
 
-In this improved model, I found that the interaction term of month 4, 5, 8, 9, 10, 11 are significantly different from the January term. This indicates that the influences of population size on $log\frac{N_t} {N_{t-1}}$ in these months are different from the one in month 1.
+From the above 4 summary tables, I found that as long as the model includes seasonality, the varaince of $log\frac{N_t} {N_{t-1}}$ being explained significantly increased. (and I found the model that produce $R^2$=`r round(summary(thrip.season3.gomp)$adj.r.squared,3)`). 
 
-Now I compare the model considering seasonality with the one with no seasonality.
+In thse improved models, the one produces the highest adjust $R^2$ (`r round(summary(thrip.season3.gomp)$adj.r.squared,3)`) is the one that includes seasonality in both intercept and slope of the linear model. The following anova table compares the model without seasonality(model1), the model that includes seasonality in slope (model2) or intercept (model3), and the model with seasonality in both slope and intercept (model4). From the two anova tables, we see that the model4 is not significantly better than the model that includes with seasonality in either intercept or slope.
 
 ```{r}
-anova(thrip.lm.gomp, thrip.season.gomp)
+anova(thrip.lm.gomp, thrip.season1.gomp, thrip.season3.gomp)
+anova(thrip.lm.gomp, thrip.season2.gomp, thrip.season3.gomp)
 ```
 
-The one with seasonality largely improves the explanation power as it decrease the residual sum of square from `r anova(thrip.lm.gomp, thrip.season.gomp)[1,2]` to `r anova(thrip.lm.gomp, thrip.season.gomp)[2,2]` (total sum of square is `r sum(anova(thrip.season.gomp)[,2])`). However, it still does not beat your 0.74 in adjust $R^2$
-
+The one includes seasonality in either slope and intercept in largely improves the explanation power as it decrease the residual sum of square from `r anova(thrip.lm.gomp, thrip.season.gomp)[1,2]` to `r anova(thrip.lm.gomp, thrip.season1.gomp)[2,2]` (slope) or `r anova(thrip.lm.gomp, thrip.season1.gomp)[2,2]` (intercept) (total sum of square is `r sum(anova(thrip.season1.gomp)[,2])`). 
 In the following I try to fit a linear mix effects model to the data to see if there is any further improvement. However, because the mixed effects model does not use ordinary least square method, so I can not extract the $R^2$ from the mixed effect model. In stead, I calculate the residual sum of square and the AIC of the two models for comparison.
 
 ```{r}
@@ -457,10 +491,6 @@ AIC(thrip.season.gomp)
 ```
 
 The mixed effects model further reduce the residual sum of square by 2 unit. However, from the AIC value, the mixed effects model does not perform better than the simple linear model with interaction terms (AIC of the mixed effects model is `r AIC(mod.lme)` and AIC of the simple linear model is `r AIC(thrip.season.gomp)`).
-
-?? What is the model that produce your 0.74 adjust $R^2$?
-
-> Try including seasonality in the intercept as well as the slope of the Gompertz.
 
 ```{r}
 thrip.season.gomp1 = lm(ratio~1:month + pop.log + pop.log:month, data=thrip.ex2)
@@ -532,20 +562,20 @@ Here I use the best model that includes seasonality to do the same analyses as t
 ## 12.a
 
 ```{r, thrip model checking}
-plot(thrip.season.gomp)
-bptest(thrip.season.gomp)
+plot(thrip.season3.gomp)
+bptest(thrip.season3.gomp)
 ```
 
-From the 4 diagnostic plots, I see no clear structure of the residuals. The Breusch-Pagan test also suggests that the residual are homoscedasticity. 
+From the 4 diagnostic plots, I see no clear structure of the residuals besides three data points that have higher rediduals. The Breusch-Pagan test also suggests that the residual are homoscedasticity. 
 
 ## 12.b
 ```{r, thrip normality of residuals}
-shapiro.test(residuals(thrip.season.gomp))
-qqnorm(residuals(thrip.season.gomp))
-qqline(residuals(thrip.season.gomp), col="red")
+shapiro.test(residuals(thrip.season3.gomp))
+qqnorm(residuals(thrip.season3.gomp))
+qqline(residuals(thrip.season3.gomp), col="red")
 ```
 
-The Shapiro-Wilk test also shows nonsignificant result. This means the residuals are normally distributed. However, from the QQ plot, only point 30, 31, and 39 might be slightly deviated from the theoretical line. 
+The Shapiro-Wilk test still shows significant result, which is probabliy results from the influence of three data points (30, 39, and 78) that have higher residual. 
 
 ## 12.c
 
@@ -554,7 +584,7 @@ From the fourth diagnostic plot (Residuals vs Leverage plot), point 78 and 79 ar
 ## 12.d
 
 ```{r, thrip temporal autocorrelation}
-dwtest(thrip.season.gomp)
+dwtest(thrip.season3.gomp)
 ```
 
 The residuals of the Gompertz model shows no temporal autocorrelation structure in residuals. 
@@ -562,11 +592,11 @@ The residuals of the Gompertz model shows no temporal autocorrelation structure 
 ## 12.e
 
 ```{r, thrip biological validation}
-summary(thrip.season.gomp)
+summary(thrip.season3.gomp)
 
 library(msm)
-thrip.r.se = deltamethod(~ -log(-x2), coef(thrip.season.gomp), vcov(thrip.season.gomp))
-thrip.K.se = deltamethod(~ exp(x1/-(x2)), coef(thrip.season.gomp), vcov(thrip.season.gomp))
+thrip.r.se = deltamethod(~ -log(-x2), coef(thrip.season3.gomp), vcov(thrip.season3.gomp))
+thrip.K.se = deltamethod(~ exp(x1/-(x2)), coef(thrip.season3.gomp), vcov(thrip.season3.gomp))
 ```
 
 > the r and K estimated from this model (including seasonality) would be different in different months. How do I interpret this?
