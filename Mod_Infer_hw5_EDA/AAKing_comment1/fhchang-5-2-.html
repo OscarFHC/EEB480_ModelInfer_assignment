@@ -146,16 +146,12 @@ $(document).ready(function () {
 <blockquote>
 <p>Just use whichever you prefer: there is no need to do the same thing twice.</p>
 </blockquote>
-<pre class="r"><code>library(ggplot2)</code></pre>
-<pre><code>## Warning: package 'ggplot2' was built under R version 3.3.2</code></pre>
-<pre class="r"><code>library(dplyr)</code></pre>
-<pre><code>## Warning: package 'dplyr' was built under R version 3.3.2</code></pre>
-<pre class="r"><code>library(tidyr)</code></pre>
-<pre><code>## Warning: package 'tidyr' was built under R version 3.3.2</code></pre>
-<pre class="r"><code>library(plyr)
+<pre class="r"><code>library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(plyr)
 library(reshape2)
 library(RCurl)</code></pre>
-<pre><code>## Warning: package 'RCurl' was built under R version 3.3.2</code></pre>
 <p>Now, load the data and skim the data type and data structure.</p>
 <pre class="r"><code>AL_SP=read.csv(text=getURL(&quot;https://raw.githubusercontent.com/OscarFHC/EEB480_ModelInfer_assignment/master/Mod_Infer_hw5_EDA/MLB_AL_SP_1986_2016.csv&quot;), sep=&quot;,&quot;, header=T, comment.char=&quot;#&quot;)
 

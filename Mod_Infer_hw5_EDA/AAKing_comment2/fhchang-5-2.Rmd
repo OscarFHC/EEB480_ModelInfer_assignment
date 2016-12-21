@@ -40,7 +40,7 @@ library(RCurl)
 
 Now, load the data and skim the data type and data structure.
 
-```{r,load data}
+```{r,load data, include=FALSE}
 AL_SP=read.csv(text=getURL("https://raw.githubusercontent.com/OscarFHC/EEB480_ModelInfer_assignment/master/Mod_Infer_hw5_EDA/MLB_AL_SP_1986_2016.csv"), sep=",", header=T, comment.char="#")
 
 str(AL_SP)

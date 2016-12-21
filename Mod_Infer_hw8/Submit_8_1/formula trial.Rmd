@@ -14,6 +14,7 @@ output:
       collapsed: false
       smooth_scroll: true
       toc_depth: 4
+bibliography: D:/Courses/UM/2016_WN/NRE538_GSRA/Labs/NRE538_GLM/GLM_ref.bib
 
 ---
 
@@ -49,3 +50,17 @@ where $r_m$ is the highest probability an individual could be infected, and $K$ 
 Accordingly, the CDF the determines the probability of an individual to be seropositive is 
 
 $$\prob{X_i=\text{pos}} = 1 - \exp{\left[-\int_0^L\!\lambda(L)\dd{L}\right]} = 1 - \exp{\left [-r_m\,K (\frac{L}{K} - Log(1 + \frac{L}{K}) \right ]}$$.
+
+$$Y_i\ \stackrel{\text{i.i.d.}}{\sim}\ f(g^{-1}((X\,\beta)_i),\dots)$$
+
+$$f(g^{-1}((X\,\beta)_i),\dots)$$
+
+- The $f$ is the Error distribution, BUT! it is actually the distribution of your dependent variable (i.e. the **data distribution**)... Theoretically, this can be ANY distribution.
+- The $g^{-1}$ is the **link function**. 
+
+To determine what data distribution to use requires you to understand how your data is being generated. For example, it would be logical to use [Bernoulli distribution](https://en.wikipedia.org/wiki/Bernoulli_distribution) as the data distribution if you are dealing with a yes-no data set. To determine what link function to use requires knowledge of the data, theoretical knowledge and especially the empirical fit to the data. Most of the time, there is a special link function that goes together with the data distribution, which is also called canonical link function. However, always keep in mind that __chosing data distribution and link function is just two pieces of the model__. It is just like figuring out what independent variables to include in your model.  
+The following two posts are pretty clear in explaining link function and some conceptual theory of GLM. I encourage you to read them.  
+[GLM](http://stats.stackexchange.com/questions/40876/difference-between-link-function-and-canonical-link-function-for-glm)  
+[link function](http://stats.stackexchange.com/questions/20523/difference-between-logit-and-probit-models#30909)  
+
+The data come from @johnson1973species [**faraway** package](http://people.bath.ac.uk/jjf23/ELM/), which describes the variables as follows:

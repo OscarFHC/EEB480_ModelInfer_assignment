@@ -156,10 +156,8 @@ ALSP.WL %>%
     WL9.bin=cut(WL9,breaks=WL9.breaks,include=TRUE,ordered=TRUE)
   ) %>% 
   mutate(
-    ERA=mapvalues(as.numeric(ERA.bin),from=seq_len(50),
-                  to=head(ERA.breaks,-1)+0.5*diff(ERA.breaks)),
-    WL9=mapvalues(as.numeric(WL9.bin),from=seq_len(50),
-                  to=head(WL9.breaks,-1)+0.5*diff(WL9.breaks))
+    ERA=mapvalues(as.numeric(ERA.bin), from=seq_len(50), to=head(ERA.breaks,-1)+0.5*diff(ERA.breaks)),
+    WL9=mapvalues(as.numeric(WL9.bin), from=seq_len(50), to=head(WL9.breaks,-1)+0.5*diff(WL9.breaks))
     ) %>%
   ddply(~ERA.bin+WL9.bin,summarize,
         ERA=mean(ERA),WL9=mean(WL9),IP=mean(IP)) %>% 

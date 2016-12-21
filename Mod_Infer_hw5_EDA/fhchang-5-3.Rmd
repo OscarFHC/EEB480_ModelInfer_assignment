@@ -1,0 +1,124 @@
+---
+title: "Revised Assignment 5: Exercise in Data Visualization_20161019"
+author: "Oscar Feng-Hsun Chang"
+output: html_document
+---
+
+In this assignment, I used baseball statistic data downloaded from [FanGraphs website](http://www.fangraphs.com) simply because I'm interested in baseball. This data include the following statistics of all the starting pitchers in the past 30 seasons (1986-2016).
+
++ W: game won
++ L: game lost
++ G: game played
++ GS: game played as the starter
++ IP: inning played in the whole season
++ K9: strike out produced per 9 innings
++ BB9: Balls produced per 9 innings
++ BABIP: how many of a batter's balls in play go for hits, excluding home runs
++ LOB: Left on Base percentage,  the percentage of base runners that a pitcher strands on base over the course of a season
++ HRFB: Home Run to Fly Ball rate, ratio of how many home runs are hit against a pitcher for every fly ball they allow
++ FIP: Fielding Independent Pitching, what a player??s ERA would look like over a given period of time if the pitcher were to have experienced league average results on balls in play and league average timing
++ WAR: Wins Above Replacement, an attempt by the sabermetric baseball community to summarize a player's total contributions to their team in one statistic
++ WHIP: Walks plus Hits per Innings Pitched, measures how many base runners a pitcher lets up
++ ERA: Earned Run Average, calculated by dividing a pitcher??s total number of Earned Runs allowed by his total number of Innings Pitched and multiply by nine
++ Age: the pitcher's age at the season
+
+
+### Loading packages and data
+
+First, I loaded the packages that are needed in my further analyses. 
+
+```{r, load package, message=FALSE}
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+library(plyr)
+library(reshape2)
+library(RCurl)
+```
+
+Now, load the data.
+
+```{r,load data}
+AL_SP=read.csv(text=getURL("https://raw.githubusercontent.com/OscarFHC/EEB480_ModelInfer_assignment/master/Mod_Infer_hw5_EDA/MLB_AL_SP_1986_2016.csv"), sep=",", header=T, comment.char="#")
+```
+
+Now use _arrange_ function to sort the data first by Season(year) then by team and Pitcher's name, so that it looks nicer. After that I filter out pitchers that pitched more than 1 innings. 
+
+```{r, order data}
+AL_SP.all = AL_SP %>% 
+  arrange(Season, Team, Name) %>%
+  filter(IP>1 & GS>1)
+head(AL_SP.all)
+```
+
+## 1.What is the relationship between ERA (Earned Run Average) and the Win-loss ratio and does this relationship change with IP (number of Inning Pitched).
+
+To make the win-loss ratio comparable, I divided the ratio by the IP. I also divide the pitcher's into 3 arbitrary groups according to the IP (<50, 50-100, >100)
+
+```{r, echo=FALSE}
+small50IP = AL_SP %>%
+            filter(IP<50, W>0, L>0) %>%
+            mutate(WL9 = W/L/IP, IP.id="<50 IP")
+
+large50IP = AL_SP %>%
+            filter(IP>50 & IP<100, W>0, L>0) %>%
+            mutate(WL9 = W/L/IP, IP.id="50-100 IP")
+
+large100IP = AL_SP %>%
+             filter(IP>100, W>0, L>0) %>%
+             mutate(WL9 = W/L/IP, IP.id=">100IP")
+
+ALSP.WL = rbind(small50IP, large50IP, large100IP) %>%
+          filter(WL9>=0)%>%
+          select(Season, Name, IP, IP.id, WL9, ERA, WAR, BABIP)
+```
+
+```{r, echo=FALSE}
+ggplot(data=ALSP.WL,
+       group=IP.id)+
+  geom_point(aes(x=ERA, y=WL9))+
+  #facet_grid(IP.id~., scales="free")+ # this is not working
+  facet_wrap(~IP.id, nrow=1, scales="free")+
+  xlab("ERA")+
+  ylab("Win-Loss ratio per 9 inning pitched")
+```
+
+To me, this reveals two things. First, giving up more runs does not necessary means losing more, which could make sense as winning a game requires not just allowing less runs but also batting in more runs. Second, the relationship between Win-Loss ratio and ERA, if there is any, looks non-linear, which is even more interesting!
+
+I then try to plot a 3D plot (which basically modifies the code you wrote) to visualize the relationship between IP, ERA and Win-Loss ratio per 9 inning pitched. 
+
+```{r }
+ERA.breaks = with(ALSP.WL, seq(from=min(ERA),to=max(ERA), length=51))
+IP.breaks = with(ALSP.WL, seq(from=min(IP),to=max(IP), length=51))
+ALSP.WL %>%
+  mutate(
+    ERA.bin=cut(ERA, breaks=ERA.breaks, include=TRUE,ordered=TRUE),
+    IP.bin=cut(IP, breaks=IP.breaks, include=TRUE,ordered=TRUE)
+  ) %>% 
+  mutate(
+    ERA=mapvalues(as.numeric(ERA.bin), from=seq_len(50), to=head(ERA.breaks,-1)+0.5*diff(ERA.breaks)),
+    IP=mapvalues(as.numeric(IP.bin), from=seq_len(50), to=head(IP.breaks,-1)+0.5*diff(IP.breaks))
+    ) %>%
+  ddply(~ERA.bin+IP.bin,summarize,
+        ERA=mean(ERA),WL9=mean(WL9),IP=mean(IP)) %>% 
+  ggplot(aes(x=ERA, y=IP, z=WL9))+
+  geom_tile(aes(fill=WL9))+
+  xlab("ERA")+
+  ylab("IP")
+```
+
+Here, it seems that at similar ERA, the more inning a pitcher pitched, the less likely the pitcher produce more win. This is somehow counter intuitive to me. I suspect this is just a coincident. 
+
+## 2. What is the relationship between BABIP (should reflect how many hit a pitcher allowed per balls in play) and ERA (Earned Run Average) and how does this relationship change with IP.
+
+```{r}
+ggplot(data=ALSP.WL, aes(x=ERA, y=BABIP),
+       group=IP.id)+
+    geom_point()+
+    stat_smooth(method="lm")+
+    facet_wrap(~IP.id, nrow=1, scales="free")+
+    xlab("BABIP")+
+    ylab("ERA")
+```
+
+There is a more clear positive relationship between BABIP and ERA, indicating that the more hit a pitcher allowed, the more runs the pitcher will allow. This relationship also seems to be different in each group of pitcher. Again, I can use contour plot to avoid arbitrary grouping.
